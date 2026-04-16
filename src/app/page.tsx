@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function Home() {
-  redirect('/farmer/yadagiri')
+  redirect('/farmer/kapil-korlepara')
 }

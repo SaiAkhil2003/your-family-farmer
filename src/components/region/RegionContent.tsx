@@ -1,13 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useLang } from '@/lib/LanguageContext'
 import RegionMap from './RegionMap'
 import FarmersTab from './tabs/FarmersTab'
 import BrowseProduceTab from './tabs/BrowseProduceTab'
 import AddFarmerTab from './tabs/AddFarmerTab'
-
-const FILTERS = ['All', 'Vegetables', 'Fruits', 'Leafy greens', 'Natural only']
-const TABS = ['Farmers', 'Browse produce', 'Add a farmer']
 
 const CATEGORY_MAP: Record<string, string[]> = {
   Vegetables: ['Tomato', 'Brinjal', 'Drumstick', 'Bitter Gourd', 'Raw Banana'],
@@ -22,19 +20,34 @@ export default function RegionContent({
   farmers: Record<string, unknown>[]
   produce: Record<string, unknown>[]
 }) {
+  const { tx } = useLang()
   const [activeFilter, setActiveFilter] = useState('All')
   const [activeTab, setActiveTab] = useState(0)
   const [highlightedFarmerId, setHighlightedFarmerId] = useState<string | null>(null)
 
+  const FILTERS = [tx.all, tx.vegetables, tx.fruits, tx.leafyGreens, tx.naturalOnly]
+  const TABS = [tx.farmers, tx.browseProduce, tx.addFarmer]
+
+  // Map filter label back to English key for category lookup
+  const filterKeyMap: Record<string, string> = {
+    [tx.all]: 'All',
+    [tx.vegetables]: 'Vegetables',
+    [tx.fruits]: 'Fruits',
+    [tx.leafyGreens]: 'Leafy greens',
+    [tx.naturalOnly]: 'Natural only',
+  }
+
+  const filterKey = filterKeyMap[activeFilter] ?? activeFilter
+
   const filteredProduce = produce.filter((p) => {
-    if (activeFilter === 'All') return true
-    if (activeFilter === 'Natural only') return p.method === 'natural'
-    const names = CATEGORY_MAP[activeFilter] ?? []
+    if (filterKey === 'All') return true
+    if (filterKey === 'Natural only') return p.method === 'natural'
+    const names = CATEGORY_MAP[filterKey] ?? []
     return names.some((n) => (p.name as string).includes(n))
   })
 
   const filteredFarmerIds = new Set(filteredProduce.map((p) => p.farmer_id))
-  const filteredFarmers = activeFilter === 'All'
+  const filteredFarmers = filterKey === 'All'
     ? farmers
     : farmers.filter((f) => filteredFarmerIds.has(f.id))
 
@@ -85,7 +98,6 @@ export default function RegionContent({
         </div>
       </div>
 
-      {/* Tab content */}
       <div className="px-4 py-4">
         {activeTab === 0 && (
           <FarmersTab

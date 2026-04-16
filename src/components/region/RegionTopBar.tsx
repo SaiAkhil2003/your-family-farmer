@@ -1,3 +1,8 @@
+'use client'
+
+import { useLang } from '@/lib/LanguageContext'
+import LanguageToggle from '@/components/LanguageToggle'
+
 type Region = {
   name: string
   district: string
@@ -5,6 +10,7 @@ type Region = {
 
 export default function RegionTopBar({ region }: { region: Record<string, unknown> }) {
   const r = region as Region
+  const { tx } = useLang()
 
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
@@ -13,15 +19,18 @@ export default function RegionTopBar({ region }: { region: Record<string, unknow
           <path d="M12 2C8 2 4 6 4 10c0 6 8 12 8 12s8-6 8-12c0-4-4-8-8-8z" fill="#2d6a2d" />
           <circle cx="12" cy="10" r="3" fill="white" />
         </svg>
-        <span className="font-bold text-green-800 text-sm">YourFamilyFarmer</span>
+        <span className="font-bold text-green-800 text-sm">{tx.appName}</span>
       </div>
 
-      <div className="flex items-center gap-1 text-sm text-gray-600">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-          <circle cx="12" cy="10" r="3" />
-        </svg>
-        <span>{r.name}, {r.district}</span>
+      <div className="flex items-center gap-3">
+        <LanguageToggle />
+        <div className="flex items-center gap-1 text-sm text-gray-600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          <span className="text-xs">{r.name}</span>
+        </div>
       </div>
     </div>
   )

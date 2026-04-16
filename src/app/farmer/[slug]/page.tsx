@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 import TopNav from '@/components/farmer/TopNav'
 import FarmCover from '@/components/farmer/FarmCover'
 import TrustStrip from '@/components/farmer/TrustStrip'
@@ -58,12 +59,14 @@ export default async function FarmerPage({ params }: { params: Promise<{ slug: s
       <TopNav regionSlug={farmer.region_slug} />
       <FarmCover farmer={farmer} />
       <TrustStrip farmer={farmer} produceCount={produce?.length ?? 0} />
-      <TabSection
-        farmer={farmer}
-        produce={produce ?? []}
-        reviews={reviews ?? []}
-        media={media ?? []}
-      />
+      <Suspense fallback={null}>
+        <TabSection
+          farmer={farmer}
+          produce={produce ?? []}
+          reviews={reviews ?? []}
+          media={media ?? []}
+        />
+      </Suspense>
       <StickyBottomBar farmer={farmer} />
     </main>
   )

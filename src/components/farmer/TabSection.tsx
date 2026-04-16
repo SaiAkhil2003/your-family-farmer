@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useLang } from '@/lib/LanguageContext'
 import StoryTab from './tabs/StoryTab'
 import ProduceTab from './tabs/ProduceTab'
 import QualityTab from './tabs/QualityTab'
 import ReviewsTab from './tabs/ReviewsTab'
 import FarmMediaTab from './tabs/FarmMediaTab'
-
-const TABS = ['Story', 'Produce', 'Quality', 'Reviews', 'Farm']
 
 type Props = {
   farmer: Record<string, unknown>
@@ -17,11 +17,15 @@ type Props = {
 }
 
 export default function TabSection({ farmer, produce, reviews, media }: Props) {
-  const [activeTab, setActiveTab] = useState(0)
+  const { tx } = useLang()
+  const [activeTab, setActiveTab] = useState(1)
+  const searchParams = useSearchParams()
+  const isEditMode = searchParams.get('edit') === 'true'
+
+  const TABS = [tx.story, tx.produce, tx.quality, tx.reviews, tx.farm]
 
   return (
     <div>
-      {/* Sticky tab bar */}
       <div className="sticky top-[53px] z-40 bg-white border-b border-gray-200">
         <div className="flex overflow-x-auto scrollbar-hide">
           {TABS.map((tab, i) => (
@@ -40,10 +44,9 @@ export default function TabSection({ farmer, produce, reviews, media }: Props) {
         </div>
       </div>
 
-      {/* Tab content */}
       <div className="px-4 py-4">
         {activeTab === 0 && <StoryTab farmer={farmer} />}
-        {activeTab === 1 && <ProduceTab farmer={farmer} produce={produce} />}
+        {activeTab === 1 && <ProduceTab farmer={farmer} produce={produce} isEditMode={isEditMode} />}
         {activeTab === 2 && <QualityTab farmer={farmer} produce={produce} />}
         {activeTab === 3 && <ReviewsTab reviews={reviews} />}
         {activeTab === 4 && <FarmMediaTab media={media} />}

@@ -1,3 +1,7 @@
+'use client'
+
+import { useLang } from '@/lib/LanguageContext'
+
 type Farmer = {
   farming_since_year: number
   rating_avg: number
@@ -11,14 +15,15 @@ export default function TrustStrip({
   farmer: Farmer
   produceCount: number
 }) {
+  const { tx } = useLang()
   const yearsfarming = new Date().getFullYear() - farmer.farming_since_year
 
   const stats = [
-    { label: 'Years farming', value: yearsfarming.toString() },
-    { label: 'Star rating', value: `${farmer.rating_avg} ★` },
-    { label: 'Buyers', value: farmer.buyer_count.toString() },
-    { label: 'Chemicals', value: '0' },
-    { label: 'Produce now', value: `${produceCount}` },
+    { label: tx.yearsFarming, value: yearsfarming.toString() },
+    { label: tx.starRating, value: `${farmer.rating_avg} ★` },
+    { label: tx.buyers, value: farmer.buyer_count.toString() },
+    { label: tx.chemicals, value: '0' },
+    { label: tx.produceNow, value: `${produceCount}` },
   ]
 
   return (
