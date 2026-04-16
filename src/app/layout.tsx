@@ -1,0 +1,19 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "YourFamilyFarmer — Natural food from farmers near you",
+  description: "Buy natural produce directly from farmers in Andhra Pradesh. No middlemen.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className="h-full">
+      <body className="min-h-full bg-gray-50 antialiased">{children}</body>
+    </html>
+  );
+}
