@@ -112,10 +112,11 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
   const [stock, setStock] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
 
   const reset = () => {
     setName(''); setVariety(''); setEmoji('🌿'); setStatus('available')
-    setPrice(''); setStock(''); setSuccess(false)
+    setPrice(''); setStock(''); setSuccess(false); setError('')
   }
 
   const handleSubmit = async () => {
@@ -132,12 +133,14 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
     if (price) payload.price_tier_1_price = Number(price)
     if (stock) payload.stock_qty = Number(stock)
 
-    const { data, error } = await supabase.from('produce_listings').insert(payload).select().single()
+    const { data, error: insertError } = await supabase.from('produce_listings').insert(payload).select().single()
     setLoading(false)
-    if (!error && data) {
+    if (!insertError && data) {
       onAdded(data as Produce)
       setSuccess(true)
       setTimeout(() => { reset(); setOpen(false) }, 1500)
+    } else {
+      setError(insertError?.message ?? 'Failed to add produce. Check Supabase RLS policies.')
     }
   }
 
@@ -228,6 +231,10 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
         ))}
       </div>
 
+      {error && (
+        <p className="text-center text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+      )}
+
       {success ? (
         <p className="text-center text-sm text-green-700 font-semibold py-1">✓ Added successfully!</p>
       ) : (
@@ -286,8 +293,8 @@ function ProduceCard({ item, whatsappLink }: { item: Produce; whatsappLink: stri
       {item.price_tier_1_price && (
         <div className="border-t border-gray-100 px-3 py-2 bg-gray-50">
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
-            {item.price_tier_1_qty && item.price_tier_1_price && (
-              <span>1–{item.price_tier_2_qty ? item.price_tier_2_qty - 1 : item.price_tier_1_qty} kg: <strong>₹{item.price_tier_1_price}</strong></span>
+            {item.price_tier_1_price && (
+              <span>{item.price_tier_1_qty ? `1–${item.price_tier_2_qty ? item.price_tier_2_qty - 1 : item.price_tier_1_qty} kg` : 'Per kg'}: <strong>₹{item.price_tier_1_price}</strong></span>
             )}
             {item.price_tier_2_qty && item.price_tier_2_price && (
               <span>{item.price_tier_2_qty}–{item.price_tier_3_qty ? item.price_tier_3_qty - 1 : '+'} kg: <strong>₹{item.price_tier_2_price}</strong></span>
