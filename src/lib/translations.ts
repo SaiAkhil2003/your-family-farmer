@@ -58,7 +58,7 @@ export const t = {
     saving: 'Saving...',
     expected: 'Expected:',
     noProduceListed: 'No produce listed yet. Check back soon.',
-    orderMessage: 'Hello {name} anna! I found your profile on YourFamilyFarmer.\nI would like to order:\n- {produce}\n\nMy name: \nDelivery / pickup preference: \nMy location: ',
+    orderMessage: 'Hello {name} anna! I found your profile on YourFamilyFarmer.\nI would like to order:\n- {produce}: ___ kg\n\nMy name: [please fill in]\nDelivery or pickup: [please fill in]\nMy location / address: [please fill in]',
 
     // Quality tab
     soilHealth: 'Soil health',
@@ -132,6 +132,30 @@ export const t = {
     referFarmerDesc: 'Know a natural farmer nearby? Share their name and number with us. We will onboard them and credit you as a referrer.',
     areYouFarmer: 'Are you a farmer?',
     areYouFarmerDesc: 'Sell your natural produce directly to local buyers. No middlemen. Set your own prices. Get paid directly.',
+
+    // Global nav
+    consumerNav: 'Consumer',
+    farmerNav: 'Farmer',
+    deliveryNav: 'Delivery',
+    moderatorNav: 'Moderator',
+
+    // Consumer page
+    consumerHeroTitle: 'Fresh from your neighbourhood farmer',
+    consumerHeroSubtitle: 'Straight from farm · No middlemen',
+    farmersLabel: 'Farmers',
+    productsLabel: 'Products',
+    middlemenLabel: 'Middlemen',
+    searchPlaceholder: 'Search produce... / పంట వెతకండి...',
+    allMethods: '🌿 All methods',
+    naturalMethod: '🌱 Natural',
+    organicMethod: '🍃 Organic',
+    lowChemicalMethod: '⚡ Low chemical',
+    grainsAndPulses: 'Grains & Pulses',
+    availableNowCount: 'items',
+    noResults: 'No produce found. Try a different search.',
+    orderBtn: 'Order via WhatsApp',
+    viewFarmerBtn: 'View farmer',
+    comingSoonBadge: 'Coming soon',
   },
 
   te: {
@@ -191,7 +215,7 @@ export const t = {
     saving: 'సేవ్ అవుతోంది...',
     expected: 'అంచనా తేదీ:',
     noProduceListed: 'ఇంకా పంట జాబితా చేయబడలేదు. త్వరలో చెక్ చేయండి.',
-    orderMessage: 'నమస్కారం {name} అన్నా! నేను YourFamilyFarmer లో మీ ప్రొఫైల్ చూశాను.\nనేను ఆర్డర్ చేయాలనుకుంటున్నాను:\n- {produce}\n\nనా పేరు: \nడెలివరీ / పికప్: \nనా స్థానం: ',
+    orderMessage: 'నమస్కారం {name} అన్నా! నేను YourFamilyFarmer లో మీ ప్రొఫైల్ చూశాను.\nనేను ఆర్డర్ చేయాలనుకుంటున్నాను:\n- {produce}: ___ కిలోలు\n\nనా పేరు: [దయచేసి నమోదు చేయండి]\nడెలివరీ లేదా పికప్: [దయచేసి నమోదు చేయండి]\nనా స్థానం / చిరునామా: [దయచేసి నమోదు చేయండి]',
 
     // Quality tab
     soilHealth: 'మట్టి ఆరోగ్యం',
@@ -265,6 +289,30 @@ export const t = {
     referFarmerDesc: 'దగ్గరలో సహజ రైతు తెలుసా? వారి పేరు మరియు నంబర్ మాతో షేర్ చేయండి. మేము వారిని ఆన్‌బోర్డ్ చేస్తాము.',
     areYouFarmer: 'మీరు రైతా?',
     areYouFarmerDesc: 'మీ సహజ పంటను నేరుగా స్థానిక కొనుగోలుదారులకు అమ్మండి. మధ్యవర్తులు లేరు. మీరే ధర నిర్ణయించండి.',
+
+    // Global nav
+    consumerNav: 'కొనుగోలుదారు',
+    farmerNav: 'రైతు',
+    deliveryNav: 'డెలివరీ',
+    moderatorNav: 'మోడరేటర్',
+
+    // Consumer page
+    consumerHeroTitle: 'మీ పక్కింటి రైతు నుండి తాజా ఆహారం',
+    consumerHeroSubtitle: 'నేరుగా పొలం నుండి · మధ్యవర్తులు లేరు',
+    farmersLabel: 'రైతులు',
+    productsLabel: 'పంటలు',
+    middlemenLabel: 'మధ్యవర్తులు',
+    searchPlaceholder: 'పంట వెతకండి...',
+    allMethods: '🌿 అన్ని పద్ధతులు',
+    naturalMethod: '🌱 సహజం',
+    organicMethod: '🍃 సేంద్రీయ',
+    lowChemicalMethod: '⚡ తక్కువ రసాయన',
+    grainsAndPulses: 'ధాన్యాలు',
+    availableNowCount: 'వస్తువులు',
+    noResults: 'పంట కనుగొనబడలేదు. వేరే వెతకండి.',
+    orderBtn: 'వాట్సాప్ లో ఆర్డర్',
+    viewFarmerBtn: 'రైతు చూడండి',
+    comingSoonBadge: 'త్వరలో వస్తుంది',
   },
 }
 

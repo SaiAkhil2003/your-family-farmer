@@ -1,0 +1,282 @@
+================================================================================
+  YOURFAMILYFARMER (YFF) — FULL SYSTEM REQUIREMENTS
+  Platform: Agri-Commerce Marketplace (Andhra Pradesh & Telangana)
+  Updated: 2026-04-18
+================================================================================
+
+--------------------------------------------------------------------------------
+  PROJECT GOAL
+--------------------------------------------------------------------------------
+A regional agri-commerce platform connecting:
+  - Farmers      → sell directly to consumers
+  - Consumers    → get fresh, trusted food
+  - Moderators   → manage platform operations
+  - Delivery     → handle logistics
+  - Admin        → control entire system
+
+One-line summary:
+  "Full platform connecting farmers, consumers, moderators, and delivery
+   with real-time demand-supply intelligence."
+
+--------------------------------------------------------------------------------
+  TECH STACK
+--------------------------------------------------------------------------------
+  Frontend    : Next.js 14 (App Router) + TypeScript
+  Styling     : Tailwind CSS (mobile-first, min 390px viewport)
+  Backend     : Node.js / API Routes
+  Database    : PostgreSQL via Supabase
+  Storage     : Supabase Storage (images, videos)
+  Messaging   : Twilio WhatsApp API
+  Hosting     : Vercel
+  Target      : Mobile-first PWA, page load < 3s on 4G
+
+--------------------------------------------------------------------------------
+  USER ROLES
+--------------------------------------------------------------------------------
+  1. Farmer          - Lists products, manages stock, views orders + insights
+  2. Consumer        - Browses, orders, tracks, reviews
+  3. Business Mod    - Approves farmers, manages listings, handles disputes
+  4. Delivery        - Accepts tasks, updates delivery status
+  5. Admin           - Full system control, analytics, user management
+
+--------------------------------------------------------------------------------
+  ROUTES
+--------------------------------------------------------------------------------
+  /                         → Redirect to /farmer (MVP)
+  /farmer/[slug]            → Farmer profile page         (Phase 1 — DONE)
+  /region/[slug]            → Regional discovery page     (Phase 2 — DONE)
+  /farmer/dashboard         → Farmer dashboard            (Phase 2)
+  /consumer/dashboard       → Consumer dashboard          (Phase 2)
+  /moderator/dashboard      → Moderator dashboard         (Phase 2)
+  /delivery/dashboard       → Delivery partner dashboard  (Phase 3)
+  /admin                    → Admin panel                 (Phase 3)
+
+================================================================================
+  PHASE 1 — CORE FOUNDATION
+================================================================================
+
+  MODULE 1: AUTHENTICATION
+  -------------------------
+  - Signup / Login for all roles (Farmer, Consumer, Delivery, Moderator)
+  - Phone number OTP login (primary)
+  - Optional WhatsApp login
+  - Role-based access control
+
+  MODULE 2: FARMER PROFILE PAGE  (/farmer/[slug])
+  -------------------------------------------------
+  Sections:
+    - Story        : Farmer background, village, district, farming method
+    - Produce      : Available products with price + quantity
+    - Quality      : Soil info, BRIX score, certifications
+    - Reviews      : Consumer ratings + written reviews
+    - Media        : Farm photos and videos
+
+  CTAs:
+    - Order Now button
+    - Contact Farmer via WhatsApp
+
+  MODULE 3: PRODUCT LISTING (on Farmer Profile)
+  -----------------------------------------------
+  Each product has:
+    - Name, Variety
+    - Price (with tier slabs):
+        1–5 kg   → ₹X per kg
+        5–20 kg  → ₹Y per kg
+    - Quantity available
+    - Harvest date
+    - Status: Available / Coming Soon / Sold Out
+    - Photos
+
+  MODULE 4: REGIONAL DISCOVERY PAGE  (/region/[slug])
+  -----------------------------------------------------
+  - List of all farmers in that region
+  - Basic map view
+  - Distance from consumer
+  - Stats: farmer count, product count
+  - Filters: Vegetables / Fruits / Organic
+  - Invite nearby farmers button
+
+================================================================================
+  PHASE 2 — MARKETPLACE ACTIVATION
+================================================================================
+
+  MODULE 5: FARMER DASHBOARD
+  ---------------------------
+  - Profile creation & editing:
+      Name, location (village, district, state)
+      Farm size, farming method (natural / chemical)
+      Upload farm images / videos
+  - Product management (add / edit / delete)
+  - Stock management
+  - View incoming orders
+  - Accept or reject orders
+  - View demand insights for region
+
+  MODULE 6: CONSUMER SYSTEM
+  ---------------------------
+  Consumer Dashboard:
+    - Browse farmers + products
+    - Filters: Vegetables, Fruits, Organic, Distance
+    - View full farmer profile
+
+  Cart & Order:
+    - Add to cart
+    - Place order
+    - Choose: Pickup or Delivery
+    - Payment: Cash on Delivery (MVP), UPI (Phase 3)
+
+  Notify Me:
+    - Alert when a Coming Soon product is available
+
+  Reviews:
+    - Rate farmer (1–5 stars)
+    - Write review text
+    - View all reviews on farmer profile
+
+  MODULE 7: ORDER MANAGEMENT SYSTEM
+  ------------------------------------
+  Order flow:
+    Consumer places order
+      → Farmer receives notification
+        → Farmer accepts / rejects
+          → Delivery partner assigned
+            → Order picked up from farmer
+              → Order delivered to consumer
+
+  Order statuses:
+    Pending → Accepted → Packed → Out for Delivery → Delivered
+
+  Features:
+    - Full order history (consumer + farmer views)
+    - Real-time status updates via WhatsApp / SMS
+
+  MODULE 8: MODERATOR SYSTEM
+  ----------------------------
+  Capabilities:
+    - Approve / reject farmer registrations
+    - Verify product listings
+    - Edit product details / pricing if needed
+    - Handle consumer complaints and escalations
+    - Monitor platform quality
+
+  Reports:
+    - Demand vs supply per region
+    - Popular crops this week / month
+    - Regional analytics dashboard
+
+  MODULE 9: NOTIFICATIONS SYSTEM
+  --------------------------------
+  Event types:
+    - Product now available (Notify Me trigger)
+    - Order placed / accepted / packed / delivered
+    - Delivery status updates
+    - New farmer joined nearby region
+
+  Channels:
+    - WhatsApp (primary — via Twilio)
+    - SMS (fallback)
+    - In-app (future Phase 3)
+
+================================================================================
+  PHASE 3 — INTELLIGENCE + SCALE
+================================================================================
+
+  MODULE 10: DEMAND-SUPPLY INTELLIGENCE
+  ---------------------------------------
+  Features:
+    - Current demand heatmap per crop per region
+    - Historical demand trends
+    - Supply gap detection
+    - Suggested pricing for farmers
+    - Crop recommendation:
+        "Tomato demand is high in Vijayawada → suggest farmers grow more"
+
+  MODULE 11: DELIVERY SYSTEM
+  ---------------------------
+  Delivery Partner Dashboard:
+    - Register as delivery partner
+    - View assigned orders
+    - See pickup location (farmer address)
+    - See drop location (consumer address)
+    - Update delivery status at each step
+    - Basic GPS tracking (future)
+
+  MODULE 12: MEDIA SYSTEM
+  ------------------------
+  - Upload farm images and videos (Supabase Storage)
+  - Display in farmer profile gallery
+  - Compress for mobile (low bandwidth)
+
+  MODULE 13: ADMIN SYSTEM
+  ------------------------
+  Admin Dashboard:
+    - Overview analytics (orders, users, revenue)
+    - User management (all roles)
+    - Moderator management (assign, remove, monitor)
+    - System health monitoring
+    - Content moderation
+
+  MODULE 14: LOCATION SYSTEM
+  ---------------------------
+  - Region-based filtering for consumers
+  - Distance calculation (consumer to farmer)
+  - Nearby farmers discovery
+  - Multi-region support (AP + TG at launch)
+
+  MODULE 15: PAYMENT SYSTEM  (Phase 3)
+  --------------------------------------
+  - UPI (Google Pay, PhonePe, Paytm)
+  - Wallet (platform credits)
+  - Online payment gateway
+  - Cash on Delivery (MVP fallback)
+
+  MODULE 16: MULTILINGUAL SUPPORT  (Phase 3)
+  --------------------------------------------
+  - Telugu language support
+  - English (default at MVP)
+
+================================================================================
+  BUILD PHASES — SUMMARY
+================================================================================
+
+  PHASE 1 (MVP — Now)
+  --------------------
+  [x] Farmer profile page        /farmer/[slug]
+  [x] Product listing on profile
+  [x] Regional discovery page    /region/[slug]
+  [ ] WhatsApp ordering (CTA)
+  [ ] Basic farmer onboarding form
+
+  PHASE 2 (Marketplace)
+  ----------------------
+  [ ] Auth system (OTP login, roles)
+  [ ] Farmer dashboard
+  [ ] Consumer dashboard + cart + orders
+  [ ] Order management flow
+  [ ] Moderator dashboard
+  [ ] Notifications (WhatsApp + SMS)
+  [ ] Reviews system
+
+  PHASE 3 (Intelligence + Scale)
+  --------------------------------
+  [ ] Delivery partner system
+  [ ] Demand-supply intelligence
+  [ ] Admin panel
+  [ ] UPI payments
+  [ ] Telugu language
+  [ ] GPS tracking for delivery
+
+================================================================================
+  CORE CONSTRAINTS (NEVER BREAK THESE)
+================================================================================
+  - Mobile-first ALWAYS (min viewport 390px)
+  - Page load < 3 seconds on 4G
+  - No payments at MVP (Phase 1)
+  - No native app (PWA only)
+  - No admin panel at MVP
+  - English UI only at MVP
+  - No downloads required for consumers
+
+================================================================================
+  END OF REQUIREMENTS
+================================================================================

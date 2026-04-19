@@ -1,0 +1,81 @@
+import { supabase } from '@/lib/supabase'
+import { NextRequest, NextResponse } from 'next/server'
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  vegetables: [
+    'tomato', 'capsicum', 'brinjal', 'eggplant', 'bean', 'pea', 'pumpkin',
+    'gourd', 'onion', 'potato', 'garlic', 'carrot', 'radish', 'cucumber',
+    'okra', 'ladyfinger', 'drumstick', 'ridge gourd', 'bottle gourd', 'chilli',
+    'pepper', 'bitter gourd', 'cluster bean', 'snake gourd',
+  ],
+  fruits: [
+    'mango', 'banana', 'papaya', 'guava', 'pomegranate', 'orange', 'lime',
+    'lemon', 'coconut', 'tamarind', 'jackfruit', 'sapota', 'fig', 'grapes',
+    'watermelon', 'muskmelon', 'pineapple', 'custard apple',
+  ],
+  grains: [
+    'rice', 'wheat', 'jowar', 'bajra', 'ragi', 'maize', 'corn', 'dal',
+    'lentil', 'chickpea', 'groundnut', 'sesame', 'turmeric', 'ginger',
+    'pulses', 'toor', 'moong', 'urad', 'chana',
+  ],
+  leafy: [
+    'spinach', 'methi', 'fenugreek', 'coriander', 'mint', 'curry',
+    'amaranth', 'sorrel', 'moringa', 'drumstick leaves', 'palak',
+  ],
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const q = searchParams.get('q') ?? ''
+  const method = searchParams.get('method') ?? ''
+  const category = searchParams.get('category') ?? ''
+
+  const { data: produce } = await supabase
+    .from('produce_listings')
+    .select('*')
+    .eq('status', 'available')
+    .order('created_at', { ascending: false })
+
+  let filtered = produce ?? []
+
+  if (q) {
+    const query = q.toLowerCase()
+    filtered = filtered.filter(
+      (p) =>
+        p.name?.toLowerCase().includes(query) ||
+        p.variety?.toLowerCase().includes(query) ||
+        p.description?.toLowerCase().includes(query)
+    )
+  }
+
+  if (method && method !== 'all') {
+    filtered = filtered.filter((p) =>
+      p.method?.toLowerCase().includes(method.toLowerCase())
+    )
+  }
+
+  if (category && category !== 'all' && CATEGORY_KEYWORDS[category]) {
+    const keywords = CATEGORY_KEYWORDS[category]
+    filtered = filtered.filter((p) =>
+      keywords.some((kw) => p.name?.toLowerCase().includes(kw))
+    )
+  }
+
+  if (!filtered.length) return NextResponse.json([])
+
+  const farmerIds = [...new Set(filtered.map((p) => p.farmer_id))]
+
+  const { data: farmers } = await supabase
+    .from('farmers')
+    .select('id, name, village, slug, phone, method')
+    .in('id', farmerIds)
+    .eq('active', true)
+
+  const farmerMap = Object.fromEntries((farmers ?? []).map((f) => [f.id, f]))
+
+  const result = filtered
+    .map((p) => ({ ...p, farmer: farmerMap[p.farmer_id] ?? null }))
+    .filter((p) => p.farmer !== null)
+
+  return NextResponse.json(result)
+}
