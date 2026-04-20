@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LanguageToggle from '@/components/LanguageToggle'
 
 type Farmer = {
   id: string
@@ -35,6 +36,9 @@ type PreviewData = {
 
 const EMOJI_OPTIONS = ['🍅', '🍌', '🥭', '🫑', '🥬', '🍆', '🥕', '🌽', '🧅', '🧄', '🥦', '🌿', '🍓', '🫒', '🌾', '🥥']
 
+const isProfileComplete = (f: Farmer | null) =>
+  !!f && f.name?.trim().length > 0 && f.village?.trim().length > 0
+
 export default function FarmerDashboard() {
   const router = useRouter()
   const [farmer, setFarmer] = useState<Farmer | null>(null)
@@ -44,6 +48,7 @@ export default function FarmerDashboard() {
   const [ordersCount, setOrdersCount] = useState(0)
   const [demandBars, setDemandBars] = useState<DemandBar[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [showProfileEdit, setShowProfileEdit] = useState(false)
 
   const loadDashboard = useCallback(async () => {
     const farmerId = localStorage.getItem('yff_farmer_id')
@@ -83,6 +88,13 @@ export default function FarmerDashboard() {
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
+  // Auto-open the profile edit modal the first time an incomplete farmer lands here.
+  useEffect(() => {
+    if (!loading && farmer && !isProfileComplete(farmer)) {
+      setShowProfileEdit(true)
+    }
+  }, [loading, farmer])
+
   const handleLogout = () => {
     localStorage.removeItem('yff_farmer_id')
     localStorage.removeItem('yff_farmer_slug')
@@ -92,30 +104,48 @@ export default function FarmerDashboard() {
   if (loading) return <LoadingScreen />
   if (notFound) return <FarmerNotFound onLogout={handleLogout} />
 
+  const profileComplete = isProfileComplete(farmer)
+  const displayName = farmer!.name?.trim() || 'Welcome'
+
   return (
     <main className="min-h-screen bg-gray-50 pb-16">
       {/* Header */}
       <div className="bg-green-900 px-4 pt-6 pb-10">
+        <div className="flex justify-end mb-2">
+          <LanguageToggle />
+        </div>
         <div className="flex items-start justify-between">
           <div>
             <p className="text-green-400 text-xs font-semibold mb-0.5 uppercase tracking-wide">
-              Farmer Dashboard
+              Farmer Dashboard / రైతు డాష్‌బోర్డ్
             </p>
-            <h1 className="text-white text-xl font-extrabold leading-tight">{farmer!.name}</h1>
+            <h1 className="text-white text-xl font-extrabold leading-tight">{displayName}</h1>
             <p className="text-green-300 text-sm mt-0.5">
-              {farmer!.village}, {farmer!.district}
+              {profileComplete
+                ? `${farmer!.village}, ${farmer!.district}`
+                : 'Complete your profile to get started / ప్రొఫైల్ పూర్తి చేయండి'}
             </p>
-            <p className="text-green-500 text-xs mt-1">
-              Last updated: {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </p>
+            <p className="text-green-500 text-xs mt-1">+91 {farmer!.phone}</p>
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            <Link
-              href={`/farmer/${farmer!.slug}`}
-              className="bg-white text-green-800 text-xs font-bold px-3 py-2 rounded-xl"
+            {profileComplete ? (
+              <Link
+                href={`/farmer/${farmer!.slug}`}
+                className="bg-white text-green-800 text-xs font-bold px-3 py-2 rounded-xl"
+              >
+                View profile ↗
+              </Link>
+            ) : (
+              <span className="bg-amber-400 text-amber-900 text-[10px] font-bold px-2 py-1 rounded-full">
+                Incomplete
+              </span>
+            )}
+            <button
+              onClick={() => setShowProfileEdit(true)}
+              className="text-white text-xs underline"
             >
-              View profile ↗
-            </Link>
+              Edit profile
+            </button>
             <button onClick={handleLogout} className="text-green-500 text-xs underline">
               Logout
             </button>
@@ -124,6 +154,27 @@ export default function FarmerDashboard() {
       </div>
 
       <div className="px-4 -mt-5 space-y-4">
+        {/* Complete profile banner */}
+        {!profileComplete && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">📝</span>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-extrabold text-amber-900 text-base leading-tight">
+                Complete your profile
+              </h3>
+              <p className="text-amber-700 text-xs mt-0.5">
+                ప్రొఫైల్ పూర్తి చేస్తే బయ్యర్లు మిమ్మల్ని కనుగొంటారు
+              </p>
+              <button
+                onClick={() => setShowProfileEdit(true)}
+                className="mt-3 bg-amber-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+              >
+                Fill details / వివరాలు నింపండి
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Stat cards */}
         <div className="grid grid-cols-2 gap-3">
           {[
@@ -143,7 +194,7 @@ export default function FarmerDashboard() {
         {/* Demand chart */}
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <h2 className="font-extrabold text-gray-900 text-base leading-tight">
-            Local demand
+            Local demand / స్థానిక డిమాండ్
           </h2>
           <p className="text-xs text-gray-500 mt-0.5 mb-4">
             మీ ప్రాంతంలో వినియోగదారులు ఏమి కోరుతున్నారు
@@ -177,43 +228,26 @@ export default function FarmerDashboard() {
           )}
         </div>
 
-        {/* Voice registration */}
-        <a
-          href="https://wa.me/917601059161?text=REGISTER"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 bg-green-700 text-white rounded-2xl p-4 w-full active:bg-green-800"
-        >
-          <div className="w-11 h-11 bg-green-600 rounded-xl flex items-center justify-center flex-shrink-0">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" fill="currentColor" stroke="none"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="23"/>
-              <line x1="8" y1="23" x2="16" y2="23"/>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm leading-tight">Register via voice (Telugu / Hindi)</p>
-            <p className="text-green-200 text-xs mt-0.5">వాయిస్ ద్వారా నమోదు చేయండి</p>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M7 17L17 7M17 7H7M17 7v10" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </a>
-
         {/* Add listing button */}
-        {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="w-full bg-white border-2 border-green-700 text-green-700 font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 active:bg-green-50"
-          >
-            <span className="text-xl leading-none">+</span>
-            Add new produce listing
-          </button>
+        {profileComplete ? (
+          !showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="w-full bg-white border-2 border-green-700 text-green-700 font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 active:bg-green-50"
+            >
+              <span className="text-xl leading-none">+</span>
+              Add new produce / కొత్త పంట చేర్చండి
+            </button>
+          )
+        ) : (
+          <div className="w-full bg-gray-100 text-gray-500 font-semibold py-4 rounded-2xl text-sm text-center">
+            Complete your profile before adding produce<br />
+            <span className="text-xs">ముందుగా ప్రొఫైల్ పూర్తి చేయండి</span>
+          </div>
         )}
 
         {/* Listing form */}
-        {showForm && (
+        {showForm && profileComplete && (
           <ProduceListingForm
             farmerId={farmer!.id}
             farmerSlug={farmer!.slug}
@@ -223,7 +257,193 @@ export default function FarmerDashboard() {
           />
         )}
       </div>
+
+      {/* Edit profile modal */}
+      {showProfileEdit && farmer && (
+        <ProfileEditModal
+          farmer={farmer}
+          onClose={() => {
+            // If profile still incomplete, don't allow close (keep banner as fallback)
+            if (isProfileComplete(farmer)) setShowProfileEdit(false)
+            else setShowProfileEdit(false) // allow dismiss; banner still shown
+          }}
+          onSaved={(updated) => {
+            setFarmer(updated)
+            setShowProfileEdit(false)
+          }}
+        />
+      )}
     </main>
+  )
+}
+
+/* ─── Profile edit modal ─────────────────────────────────── */
+function ProfileEditModal({
+  farmer,
+  onClose,
+  onSaved,
+}: {
+  farmer: Farmer
+  onClose: () => void
+  onSaved: (updated: Farmer) => void
+}) {
+  const [name, setName] = useState(farmer.name ?? '')
+  const [village, setVillage] = useState(farmer.village ?? '')
+  const [district, setDistrict] = useState(farmer.district ?? '')
+  const [method, setMethod] = useState(farmer.method ?? 'natural')
+  const [sinceYear, setSinceYear] = useState(
+    farmer.farming_since_year ? String(farmer.farming_since_year) : '',
+  )
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError('Your name is required / మీ పేరు అవసరం'); return }
+    if (!village.trim()) { setError('Village is required / గ్రామం అవసరం'); return }
+    setLoading(true)
+    setError('')
+
+    // Build a unique slug from the name once the farmer actually has one.
+    // Only regenerate slug if current slug still looks auto-generated (f-<digits>-xxxx).
+    const isAutoSlug = /^f-\d{10}-[a-z0-9]{4}$/.test(farmer.slug ?? '')
+    const baseSlug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 40) || 'farmer'
+
+    let newSlug = farmer.slug
+    if (isAutoSlug && baseSlug) {
+      const rand = Math.random().toString(36).slice(2, 5)
+      newSlug = `${baseSlug}-${rand}`
+    }
+
+    const payload: Record<string, unknown> = {
+      name: name.trim(),
+      village: village.trim(),
+      district: district.trim(),
+      method,
+      slug: newSlug,
+    }
+    if (sinceYear) payload.farming_since_year = Number(sinceYear)
+
+    const { data, error: err } = await supabase
+      .from('farmers')
+      .update(payload)
+      .eq('id', farmer.id)
+      .select('*')
+      .single()
+
+    setLoading(false)
+
+    if (err || !data) {
+      setError(err?.message ?? 'Could not save. Please try again.')
+      return
+    }
+
+    localStorage.setItem('yff_farmer_slug', data.slug)
+    onSaved(data)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div>
+            <h3 className="font-extrabold text-gray-900 text-base">Your farmer profile</h3>
+            <p className="text-xs text-gray-500">మీ రైతు ప్రొఫైల్</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 text-3xl leading-none p-1">×</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <Field
+            label="Your name / మీ పేరు *"
+            placeholder="Ramu Reddy"
+            value={name}
+            onChange={setName}
+          />
+          <Field
+            label="Village / గ్రామం *"
+            placeholder="Tadepalligudem"
+            value={village}
+            onChange={setVillage}
+          />
+          <Field
+            label="District / జిల్లా"
+            placeholder="West Godavari"
+            value={district}
+            onChange={setDistrict}
+          />
+
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+              Farming method / వ్యవసాయ పద్ధతి
+            </label>
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-green-500 focus:outline-none"
+            >
+              <option value="natural">🌱 Natural / సహజం</option>
+              <option value="organic">🍃 Organic / సేంద్రీయ</option>
+              <option value="low_chemical">⚡ Low chemical / తక్కువ రసాయన</option>
+              <option value="chemical">Chemical / రసాయన</option>
+            </select>
+          </div>
+
+          <Field
+            label="Farming since (year) / ఏ సంవత్సరం నుండి"
+            placeholder="e.g. 2005"
+            value={sinceYear}
+            onChange={setSinceYear}
+            type="number"
+          />
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={loading || !name.trim() || !village.trim()}
+            className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800"
+          >
+            {loading ? 'Saving...' : 'Save profile / ప్రొఫైల్ సేవ్'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Field({
+  label,
+  placeholder,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string
+  placeholder?: string
+  value: string
+  onChange: (v: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+        {label}
+      </label>
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
+      />
+    </div>
   )
 }
 
@@ -636,21 +856,12 @@ function FarmerNotFound({ onLogout }: { onLogout: () => void }) {
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="text-center max-w-sm space-y-4">
         <div className="text-6xl">🌾</div>
-        <h2 className="text-xl font-extrabold text-gray-900">Farmer profile not found</h2>
+        <h2 className="text-xl font-extrabold text-gray-900">Session expired</h2>
         <p className="text-gray-500 text-sm">
-          Your phone number is not linked to a farmer profile yet.
-          Contact the YourFamilyFarmer team to get set up.
+          Please log in again with your WhatsApp number.
         </p>
-        <a
-          href="https://wa.me/917601059161?text=Hi, I want to register as a farmer on YourFamilyFarmer"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block bg-green-700 text-white font-bold px-6 py-3 rounded-xl text-sm"
-        >
-          Contact us on WhatsApp
-        </a>
-        <button onClick={onLogout} className="block w-full text-gray-400 text-sm underline mt-2">
-          Logout
+        <button onClick={onLogout} className="bg-green-700 text-white font-bold px-6 py-3 rounded-xl text-sm">
+          Log in again
         </button>
       </div>
     </main>

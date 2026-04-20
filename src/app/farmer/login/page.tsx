@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LanguageToggle from '@/components/LanguageToggle'
 
 export default function FarmerLoginPage() {
   const router = useRouter()
@@ -17,7 +18,7 @@ export default function FarmerLoginPage() {
     setLoading(true)
     setError('')
 
-    // Try all common phone formats stored in DB
+    // 1. Try all common phone formats stored in DB
     const { data: farmers } = await supabase
       .from('farmers')
       .select('id, name, slug, phone')
@@ -29,14 +30,40 @@ export default function FarmerLoginPage() {
       ].join(','))
       .limit(1)
 
-    const farmer = farmers?.[0]
-    setLoading(false)
+    let farmer = farmers?.[0]
 
+    // 2. If not found, auto-create a minimal farmer record.
     if (!farmer) {
-      setError('Phone number not found. Contact the YFF team to register as a farmer.')
-      return
+      const rand = Math.random().toString(36).slice(2, 6)
+      const slug = `f-${digits}-${rand}`
+
+      const { data: created, error: insertErr } = await supabase
+        .from('farmers')
+        .insert({
+          phone: digits,
+          slug,
+          name: '',
+          village: '',
+          district: '',
+          method: 'natural',
+          region_slug: 'tadepalligudem',
+          active: true,
+        })
+        .select('id, name, slug, phone')
+        .single()
+
+      if (insertErr || !created) {
+        setLoading(false)
+        setError(
+          insertErr?.message ??
+            'Could not create your farmer profile. Please try again.',
+        )
+        return
+      }
+      farmer = created
     }
 
+    setLoading(false)
     localStorage.setItem('yff_farmer_id', farmer.id)
     localStorage.setItem('yff_farmer_slug', farmer.slug)
     router.replace('/farmer/dashboard')
@@ -44,6 +71,9 @@ export default function FarmerLoginPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+      <div className="absolute top-4 right-4">
+        <LanguageToggle />
+      </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/consumer" className="inline-flex flex-col items-center">
@@ -86,13 +116,17 @@ export default function FarmerLoginPage() {
             disabled={loading || phone.replace(/\D/g, '').length < 10}
             className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800 transition-colors"
           >
-            {loading ? 'Checking...' : 'Login / లాగిన్ అవ్వండి'}
+            {loading ? 'Please wait...' : 'Continue / కొనసాగండి'}
           </button>
+
+          <p className="text-xs text-gray-500 text-center leading-snug">
+            New here? Just enter your number and continue — we&apos;ll set up your profile.<br />
+            కొత్తవారా? మీ నంబర్ నమోదు చేసి కొనసాగండి.
+          </p>
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Only registered farmers can log in.{' '}
-          <Link href="/consumer" className="text-green-700 underline">Browse produce</Link>
+          <Link href="/consumer" className="text-green-700 underline">Browse produce instead</Link>
         </p>
       </div>
     </main>
