@@ -9,6 +9,11 @@ export type CartItem = {
   variety?: string
   emoji?: string
   pricePerKg?: number
+  priceTier1Qty?: number
+  priceTier1Price?: number
+  priceTier2Qty?: number
+  priceTier2Price?: number
+  priceTier3Price?: number
   farmerId: string
   farmerName: string
   farmerPhone: string
@@ -40,6 +45,20 @@ const writeCart = (next: CartState) => {
   window.dispatchEvent(new Event(CART_EVENT))
 }
 
+function getActiveTier(qty: number, item: CartItem): { price?: number; isDiscount: boolean } {
+  const { priceTier1Qty, priceTier1Price, priceTier2Qty, priceTier2Price, priceTier3Price } = item
+  if (priceTier1Qty == null || priceTier1Price == null)
+    return { price: item.pricePerKg, isDiscount: false }
+  if (qty <= priceTier1Qty)
+    return { price: priceTier1Price, isDiscount: false }
+  if (priceTier2Qty != null && priceTier2Price != null) {
+    if (qty <= priceTier2Qty) return { price: priceTier2Price, isDiscount: true }
+    return { price: priceTier3Price ?? priceTier2Price, isDiscount: true }
+  }
+  if (priceTier3Price != null) return { price: priceTier3Price, isDiscount: true }
+  return { price: priceTier1Price, isDiscount: false }
+}
+
 export function useCart() {
   const [cart, setCart] = useState<CartState>({})
 
@@ -57,17 +76,21 @@ export function useCart() {
   const addItem = useCallback((item: Omit<CartItem, 'qty'>, qty = 1) => {
     const next = { ...readCart() }
     const existing = next[item.listingId]
-    next[item.listingId] = {
-      ...item,
-      qty: Math.max(1, (existing?.qty ?? 0) + qty),
-    }
+    const newQty = Math.max(1, (existing?.qty ?? 0) + qty)
+    const merged = { ...item, qty: newQty }
+    const { price } = getActiveTier(newQty, merged)
+    next[item.listingId] = { ...merged, pricePerKg: price ?? item.pricePerKg }
     writeCart(next)
   }, [])
 
   const setQty = useCallback((listingId: string, qty: number) => {
     const next = { ...readCart() }
     if (qty <= 0) delete next[listingId]
-    else if (next[listingId]) next[listingId] = { ...next[listingId], qty }
+    else if (next[listingId]) {
+      const updated = { ...next[listingId], qty }
+      const { price } = getActiveTier(qty, updated)
+      next[listingId] = { ...updated, pricePerKg: price ?? updated.pricePerKg }
+    }
     writeCart(next)
   }, [])
 
@@ -293,6 +316,11 @@ function CartSheet({
                             </p>
                             {it.pricePerKg && (
                               <p className="text-xs text-gray-500">₹{it.pricePerKg}/kg</p>
+                            )}
+                            {getActiveTier(it.qty, it).isDiscount && (
+                              <p className="text-[10px] font-semibold text-green-700 mt-0.5">
+                                Bulk price applied / బల్క్ ధర వర్తింపు
+                              </p>
                             )}
                           </div>
                           <QtyStepper
