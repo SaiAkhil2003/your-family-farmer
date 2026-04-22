@@ -140,7 +140,7 @@ export const t = {
     moderatorNav: 'Moderator',
 
     // Consumer page
-    consumerHeroTitle: 'Fresh from your neighbourhood farmer',
+    consumerHeroTitle: 'Fresh from your local farmer',
     consumerHeroSubtitle: 'Straight from farm · No middlemen',
     farmersLabel: 'Farmers',
     productsLabel: 'Products',
@@ -317,3 +317,14 @@ export const t = {
 }
 
 export type TranslationKey = keyof typeof t.en
+
+export function bilingual(key: TranslationKey): string {
+  const en = (t.en as Record<string, string>)[key] ?? ''
+  const te = (t.te as Record<string, string>)[key] ?? ''
+  if (!te || en === te) return en
+  // Long / multi-line text (e.g. WhatsApp templates, descriptions) → stack with separator.
+  if (en.length > 60 || en.includes('\n') || te.includes('\n')) {
+    return `${en}\n\n---\n\n${te}`
+  }
+  return `${en} / ${te}`
+}

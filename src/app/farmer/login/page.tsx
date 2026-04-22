@@ -81,8 +81,8 @@ export default function FarmerLoginPage() {
               <span className="text-white font-black text-lg">YFF</span>
             </div>
           </Link>
-          <h1 className="text-2xl font-extrabold text-gray-900">Farmer Login</h1>
-          <p className="text-gray-500 text-sm mt-1">రైతు లాగిన్</p>
+          <h1 className="text-2xl font-extrabold text-gray-900">Farmer Login / రైతు లాగిన్</h1>
+          <p className="text-gray-500 text-sm mt-1">Sign in with WhatsApp / వాట్సాప్ తో సైన్ ఇన్</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
@@ -116,7 +116,7 @@ export default function FarmerLoginPage() {
             disabled={loading || phone.replace(/\D/g, '').length < 10}
             className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800 transition-colors"
           >
-            {loading ? 'Please wait...' : 'Continue / కొనసాగండి'}
+            {loading ? 'Please wait... / దయచేసి వేచి ఉండండి' : 'Continue / కొనసాగండి'}
           </button>
 
           <p className="text-xs text-gray-500 text-center leading-snug">
@@ -126,7 +126,9 @@ export default function FarmerLoginPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          <Link href="/consumer" className="text-green-700 underline">Browse produce instead</Link>
+          <Link href="/consumer" className="text-green-700 underline">
+            Browse produce instead / పంట బ్రౌజ్ చేయండి
+          </Link>
         </p>
       </div>
     </main>

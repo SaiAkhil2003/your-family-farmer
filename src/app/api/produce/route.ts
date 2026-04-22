@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   const { data: farmers } = await supabase
     .from('farmers')
-    .select('id, name, village, slug, phone, method, region_slug')
+    .select('id, name, village, slug, phone, method, region_slug, pickup_locations')
     .in('id', farmerIds)
     .eq('active', true)
 

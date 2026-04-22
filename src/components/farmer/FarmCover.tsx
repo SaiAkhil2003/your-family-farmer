@@ -80,7 +80,7 @@ export default function FarmCover({ farmer }: { farmer: Farmer }) {
         </svg>
 
         <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-semibold text-green-800">
-          Natural farm · since {farmer.farming_since_year}
+          Natural farm / సహజ పొలం · since {farmer.farming_since_year}
         </div>
       </div>
 

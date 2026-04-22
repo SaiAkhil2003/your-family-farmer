@@ -12,6 +12,7 @@ type Farmer = {
   slug: string
   phone: string
   method: string
+  pickup_locations?: string[] | null
 }
 
 type ProduceListing = {
@@ -19,6 +20,7 @@ type ProduceListing = {
   name: string
   variety?: string
   emoji?: string
+  image_url?: string
   method?: string
   status: string
   price_tier_1_price?: number
@@ -121,34 +123,38 @@ export default function ConsumerPage() {
       <GlobalNav activeTab="consumer" />
 
       {/* ── Hero ─────────────────────────────── */}
-      <div className="bg-green-900 px-4 pt-8 pb-14">
-        <h1 className="text-2xl font-extrabold text-white leading-snug">
-          Fresh from your<br />neighbourhood farmer
-        </h1>
-        <p className="text-green-300 text-base mt-1 font-medium">
-          మీ పక్కింటి రైతు నుండి తాజా ఆహారం
-        </p>
-        <p className="text-green-400 text-sm mt-1">నేరుగా పొలం నుండి · మధ్యవర్తులు లేరు</p>
+      <div className="bg-green-900">
+        <div className="max-w-3xl mx-auto px-4 pt-8 pb-14">
+          <h1 className="text-2xl sm:text-4xl font-extrabold text-white leading-snug">
+            Fresh from your<br />local farmer
+          </h1>
+          <p className="text-green-300 text-base sm:text-lg mt-1 font-medium">
+            మీ స్థానిక రైతు నుండి తాజా ఆహారం
+          </p>
+          <p className="text-green-400 text-sm mt-1">
+            Straight from farm · No middlemen / నేరుగా పొలం నుండి · మధ్యవర్తులు లేరు
+          </p>
 
-        {/* Stats */}
-        <div className="flex gap-8 mt-6">
-          {[
-            { val: farmerCount,       en: 'Farmers',    te: 'రైతులు' },
-            { val: available.length,  en: 'Products',   te: 'పంటలు' },
-            { val: 0,                 en: 'Middlemen',  te: 'మధ్యవర్తులు' },
-          ].map((s) => (
-            <div key={s.en}>
-              <div className="text-4xl font-black text-white">{s.val}</div>
-              <div className="text-xs text-green-300 mt-0.5 leading-snug">
-                {s.en}<br />{s.te}
+          {/* Stats */}
+          <div className="flex gap-8 mt-6">
+            {[
+              { val: farmerCount,       en: 'Farmers',    te: 'రైతులు' },
+              { val: available.length,  en: 'Products',   te: 'పంటలు' },
+              { val: 0,                 en: 'Middlemen',  te: 'మధ్యవర్తులు' },
+            ].map((s) => (
+              <div key={s.en}>
+                <div className="text-4xl font-black text-white">{s.val}</div>
+                <div className="text-xs text-green-300 mt-0.5 leading-snug">
+                  {s.en}<br />{s.te}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
       {/* ── Search card (floats over hero) ────── */}
-      <div className="px-4 -mt-7">
+      <div className="max-w-3xl mx-auto px-4 -mt-7">
         <div className="bg-white rounded-2xl shadow-xl p-4 space-y-3">
           <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -176,7 +182,7 @@ export default function ConsumerPage() {
       </div>
 
       {/* ── Category chips ───────────────────── */}
-      <div className="mt-4 px-4">
+      <div className="max-w-3xl mx-auto mt-4 px-4">
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
           {CATEGORIES.map((chip) => (
             <button
@@ -195,15 +201,17 @@ export default function ConsumerPage() {
       </div>
 
       {/* ── Available now ────────────────────── */}
-      <div className="px-4 mt-6">
+      <div className="max-w-3xl mx-auto px-4 mt-6">
         <div className="flex items-end justify-between mb-4">
           <div>
-            <h2 className="text-xl font-extrabold text-gray-900">Available now</h2>
-            <p className="text-green-700 font-semibold text-sm leading-tight">ఇప్పుడు అందుబాటులో</p>
+            <h2 className="text-xl font-extrabold text-gray-900">Available now / ఇప్పుడు అందుబాటులో</h2>
+            <p className="text-green-700 font-semibold text-sm leading-tight">
+              Fresh produce from farms nearby / తాజా పంట
+            </p>
           </div>
           {!loading && (
             <span className="text-sm font-bold text-gray-400">
-              {filtered.length} items
+              {filtered.length} items / వస్తువులు
             </span>
           )}
         </div>
@@ -223,10 +231,12 @@ export default function ConsumerPage() {
 
       {/* ── Coming soon ──────────────────────── */}
       {!loading && comingSoon.length > 0 && (
-        <div className="px-4 mt-10">
+        <div className="max-w-3xl mx-auto px-4 mt-10">
           <div className="mb-4">
-            <h2 className="text-xl font-extrabold text-gray-900">Coming soon</h2>
-            <p className="text-amber-600 font-semibold text-sm">త్వరలో వస్తుంది</p>
+            <h2 className="text-xl font-extrabold text-gray-900">Coming soon / త్వరలో వస్తుంది</h2>
+            <p className="text-amber-600 font-semibold text-sm">
+              Reserve early / ముందుగానే రిజర్వ్
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {comingSoon.map((item) => (
@@ -273,16 +283,28 @@ function ProduceCard({ item }: { item: ProduceListing }) {
       farmerPhone: farmer.phone,
       farmerVillage: farmer.village,
       farmerSlug: farmer.slug,
+      farmerPickupLocations: farmer.pickup_locations ?? [],
     }, 1)
   }
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col">
-      {/* Emoji header — taps go to farmer profile */}
+      {/* Image (or emoji fallback) — taps go to farmer profile */}
       <Link href={farmerHref}>
-        <div className={`${emojiBg} flex items-center justify-center py-7`}>
-          <span className="text-5xl">{emoji}</span>
-        </div>
+        {item.image_url ? (
+          <div className="bg-gray-100 aspect-[4/3] overflow-hidden">
+            <img
+              src={item.image_url}
+              alt={item.name}
+              loading="lazy"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className={`${emojiBg} flex items-center justify-center py-7`}>
+            <span className="text-5xl">{emoji}</span>
+          </div>
+        )}
       </Link>
 
       <div className="p-3 flex flex-col flex-1 gap-1">
@@ -333,7 +355,7 @@ function ProduceCard({ item }: { item: ProduceListing }) {
             onClick={handleAdd}
             className="mt-2 w-full bg-green-700 active:bg-green-800 text-white font-bold py-3 rounded-xl text-sm"
           >
-            + Add / చేర్చు
+            + Add to cart / చేర్చు
           </button>
         ) : (
           <div className="mt-2 flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-2 py-1.5">
@@ -379,7 +401,7 @@ function ComingSoonCard({ item }: { item: ProduceListing }) {
         )}
         {item.available_to && (
           <p className="text-xs text-amber-600 font-medium">
-            Ready: {new Date(item.available_to).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            Ready / సిద్ధం: {new Date(item.available_to).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
           </p>
         )}
         <span className="mt-1 inline-block bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full self-start">
@@ -422,9 +444,11 @@ function EmptyState() {
   return (
     <div className="text-center py-14">
       <div className="text-6xl mb-4">🔍</div>
-      <p className="text-gray-800 font-bold text-lg">No produce found</p>
-      <p className="text-gray-500 text-base mt-1">పంట కనుగొనబడలేదు</p>
-      <p className="text-gray-400 text-sm mt-2">Try a different search or category</p>
+      <p className="text-gray-800 font-bold text-lg">No produce found / పంట కనుగొనబడలేదు</p>
+      <p className="text-gray-400 text-sm mt-2">
+        Try a different search or category<br />
+        వేరే వెతకండి లేదా వేరే వర్గాన్ని ఎంచుకోండి
+      </p>
     </div>
   )
 }
@@ -444,7 +468,7 @@ function DemandIntentBanner() {
 
   const handleSubmit = async () => {
     if (!crop.trim() || !name.trim() || !phone.trim()) {
-      setError('Please fill crop name, your name, and phone number.')
+      setError('Please fill crop name, your name, and phone number. / పంట పేరు, మీ పేరు, ఫోన్ నంబర్ నింపండి.')
       return
     }
     setLoading(true)
@@ -465,12 +489,14 @@ function DemandIntentBanner() {
   }
 
   return (
-    <div className="px-4 mt-10 mb-4">
+    <div className="max-w-3xl mx-auto px-4 mt-10 mb-4">
       <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
         <div className="flex items-start gap-3">
           <span className="text-2xl">📣</span>
           <div className="flex-1 min-w-0">
-            <h3 className="font-extrabold text-amber-900 text-base leading-tight">Raise a Demand Intent</h3>
+            <h3 className="font-extrabold text-amber-900 text-base leading-tight">
+              Raise a Demand Intent / డిమాండ్ నమోదు
+            </h3>
             <p className="text-amber-700 text-sm mt-1 leading-snug">
               Let local farmers know what you need — they&apos;ll reach out when available.
             </p>
@@ -492,8 +518,11 @@ function DemandIntentBanner() {
 
         {submitted && (
           <div className="mt-4 text-center py-3">
-            <p className="text-green-700 font-bold text-base">✓ Intent raised!</p>
-            <p className="text-green-600 text-sm mt-1">Farmers in your area will be notified.</p>
+            <p className="text-green-700 font-bold text-base">✓ Intent raised! / నమోదైంది!</p>
+            <p className="text-green-600 text-sm mt-1">
+              Farmers in your area will be notified.<br />
+              మీ ప్రాంతంలోని రైతులకు తెలియజేస్తాము.
+            </p>
           </div>
         )}
 
@@ -509,7 +538,7 @@ function DemandIntentBanner() {
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
-                placeholder="Quantity (kg)"
+                placeholder="Quantity (kg) / పరిమాణం"
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 className="border border-amber-200 rounded-xl px-3 py-3 text-sm bg-white focus:border-amber-500 focus:outline-none"
@@ -523,21 +552,21 @@ function DemandIntentBanner() {
             </div>
             <input
               type="text"
-              placeholder="Delivery location (e.g. Tadepalligudem)"
+              placeholder="Delivery location / డెలివరీ స్థలం"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="w-full border border-amber-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-amber-500 focus:outline-none"
             />
             <input
               type="text"
-              placeholder="Your name *"
+              placeholder="Your name * / మీ పేరు"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full border border-amber-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-amber-500 focus:outline-none"
             />
             <input
               type="tel"
-              placeholder="Your WhatsApp number *"
+              placeholder="Your WhatsApp number * / మీ వాట్సాప్ నంబర్"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full border border-amber-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-amber-500 focus:outline-none"
@@ -552,14 +581,14 @@ function DemandIntentBanner() {
                 onClick={() => { setOpen(false); setError('') }}
                 className="flex-1 border-2 border-gray-300 text-gray-600 font-semibold py-3 rounded-xl text-sm"
               >
-                Cancel
+                Cancel / రద్దు
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={loading}
                 className="flex-1 bg-amber-600 text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50"
               >
-                {loading ? 'Submitting...' : 'Submit / నమోదు'}
+                {loading ? 'Submitting... / నమోదు అవుతోంది' : 'Submit / నమోదు'}
               </button>
             </div>
           </div>

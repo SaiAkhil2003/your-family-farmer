@@ -22,12 +22,16 @@ type Produce = {
   pesticide_result?: string
   shelf_life_days?: number
   available_to?: string
+  description?: string
+  image_url?: string
 }
 
 type Farmer = {
   id?: string
   name?: string
   phone?: string
+  village?: string
+  pickup_locations?: string[] | null
 }
 
 const EMOJI_OPTIONS = ['🍅', '🍌', '🥭', '🫑', '🥬', '🍆', '🥕', '🌽', '🧅', '🧄', '🥦', '🌿', '🍓', '🫒', '🌾']
@@ -47,11 +51,16 @@ export default function ProduceTab({
   const [listings, setListings] = useState<Produce[]>(produce as Produce[])
   const available = listings.filter((p) => p.status === 'available')
   const comingSoon = listings.filter((p) => p.status === 'coming_soon')
+  const pickupLocations = Array.isArray(f.pickup_locations) ? f.pickup_locations : []
+  const [selectedPickup, setSelectedPickup] = useState<string>('')
 
   const buildWhatsAppLink = (item: Produce) => {
-    const message = tx.orderMessage
+    let message = tx.orderMessage
       .replace('{name}', f.name ?? '')
       .replace('{produce}', `${item.name}${item.variety ? ` (${item.variety})` : ''}`)
+    if (selectedPickup) {
+      message += `\n\nPickup location / పికప్ స్థలం: ${selectedPickup}`
+    }
     return `https://wa.me/${f.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`
   }
 
@@ -59,8 +68,36 @@ export default function ProduceTab({
     setListings((prev) => [newItem, ...prev])
   }
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure? / మీరు నిశ్చితంగా ఉన్నారా?')) return
+    const { error } = await supabase.from('produce_listings').delete().eq('id', id)
+    if (error) {
+      alert(`Could not delete: ${error.message}`)
+      return
+    }
+    setListings((prev) => prev.filter((p) => p.id !== id))
+  }
+
   return (
     <div className="space-y-6">
+      {pickupLocations.length > 0 && available.length > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+          <label className="text-xs font-bold text-green-900 uppercase tracking-wide block mb-1.5">
+            Pickup location / పికప్ స్థలం
+          </label>
+          <select
+            value={selectedPickup}
+            onChange={(e) => setSelectedPickup(e.target.value)}
+            className="w-full border border-green-200 bg-white rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none"
+          >
+            <option value="">Select a pickup point / స్థలం ఎంచుకోండి</option>
+            {pickupLocations.map((loc) => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {available.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -70,7 +107,12 @@ export default function ProduceTab({
           </div>
           <div className="space-y-3">
             {available.map((item) => (
-              <ProduceCard key={item.id} item={item} whatsappLink={buildWhatsAppLink(item)} />
+              <ProduceCard
+                key={item.id}
+                item={item}
+                whatsappLink={buildWhatsAppLink(item)}
+                onDelete={isEditMode ? () => handleDelete(item.id) : undefined}
+              />
             ))}
           </div>
         </div>
@@ -85,7 +127,12 @@ export default function ProduceTab({
           </div>
           <div className="space-y-3">
             {comingSoon.map((item) => (
-              <ComingSoonCard key={item.id} item={item} farmerId={item.id} />
+              <ComingSoonCard
+                key={item.id}
+                item={item}
+                farmerId={item.id}
+                onDelete={isEditMode ? () => handleDelete(item.id) : undefined}
+              />
             ))}
           </div>
         </div>
@@ -122,6 +169,8 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
   const handleSubmit = async () => {
     if (!name.trim()) return
     setLoading(true)
+    setError('')
+
     const payload: Record<string, unknown> = {
       farmer_id: farmerId,
       name: name.trim(),
@@ -150,7 +199,7 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
         onClick={() => setOpen(true)}
         className="w-full border-2 border-dashed border-green-300 rounded-xl py-4 text-green-700 text-sm font-semibold flex items-center justify-center gap-2 hover:border-green-500 hover:bg-green-50 transition-colors"
       >
-        <span className="text-lg">+</span> Add your produce
+        <span className="text-lg">+</span> Add your produce / మీ పంట చేర్చండి
       </button>
     )
   }
@@ -158,13 +207,13 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-gray-800 text-sm">Add produce</h3>
+        <h3 className="font-bold text-gray-800 text-sm">Add produce / పంట చేర్చండి</h3>
         <button onClick={() => { reset(); setOpen(false) }} className="text-gray-400 text-lg leading-none">×</button>
       </div>
 
       {/* Emoji picker */}
       <div>
-        <p className="text-xs text-gray-500 mb-2">Pick an icon</p>
+        <p className="text-xs text-gray-500 mb-2">Pick an icon / ఐకాన్ ఎంచుకోండి</p>
         <div className="flex flex-wrap gap-2">
           {EMOJI_OPTIONS.map((e) => (
             <button
@@ -182,14 +231,14 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
       <div className="space-y-2">
         <input
           type="text"
-          placeholder="Produce name (e.g. Papaya)"
+          placeholder="Produce name / పంట పేరు (e.g. Papaya)"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
         />
         <input
           type="text"
-          placeholder="Variety (optional, e.g. Red Lady)"
+          placeholder="Variety (optional) / రకం"
           value={variety}
           onChange={(e) => setVariety(e.target.value)}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
@@ -200,14 +249,14 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
       <div className="grid grid-cols-2 gap-2">
         <input
           type="number"
-          placeholder="Price / kg (₹)"
+          placeholder="Price / kg (₹) / ధర"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
         />
         <input
           type="number"
-          placeholder="Stock (kg)"
+          placeholder="Stock (kg) / నిల్వ"
           value={stock}
           onChange={(e) => setStock(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
@@ -226,7 +275,7 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
                 : 'bg-gray-100 text-gray-600'
             }`}
           >
-            {s === 'available' ? 'Available now' : 'Coming soon'}
+            {s === 'available' ? 'Available now / అందుబాటులో' : 'Coming soon / త్వరలో'}
           </button>
         ))}
       </div>
@@ -236,21 +285,23 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
       )}
 
       {success ? (
-        <p className="text-center text-sm text-green-700 font-semibold py-1">✓ Added successfully!</p>
+        <p className="text-center text-sm text-green-700 font-semibold py-1">
+          ✓ Added successfully! / చేర్చబడింది!
+        </p>
       ) : (
         <button
           onClick={handleSubmit}
           disabled={loading || !name.trim()}
           className="w-full bg-green-700 text-white text-sm font-semibold py-2.5 rounded-lg disabled:opacity-50"
         >
-          {loading ? 'Adding...' : 'Add produce'}
+          {loading ? 'Adding... / చేరుస్తోంది' : 'Add produce / పంట చేర్చండి'}
         </button>
       )}
     </div>
   )
 }
 
-function ProduceCard({ item, whatsappLink }: { item: Produce; whatsappLink: string }) {
+function ProduceCard({ item, whatsappLink, onDelete }: { item: Produce; whatsappLink: string; onDelete?: () => void }) {
   const { tx } = useLang()
   const bgColors: Record<string, string> = {
     '🍅': 'bg-red-100', '🥬': 'bg-green-100', '🥭': 'bg-orange-100',
@@ -263,9 +314,18 @@ function ProduceCard({ item, whatsappLink }: { item: Produce; whatsappLink: stri
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
       <div className="flex gap-3 p-3">
-        <div className={`${bg} rounded-xl w-14 h-14 flex items-center justify-center text-3xl flex-shrink-0`}>
-          {emoji}
-        </div>
+        {item.image_url ? (
+          <img
+            src={item.image_url}
+            alt={item.name}
+            loading="lazy"
+            className="rounded-xl w-14 h-14 object-cover flex-shrink-0 bg-gray-100"
+          />
+        ) : (
+          <div className={`${bg} rounded-xl w-14 h-14 flex items-center justify-center text-3xl flex-shrink-0`}>
+            {emoji}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -287,6 +347,11 @@ function ProduceCard({ item, whatsappLink }: { item: Produce; whatsappLink: stri
               <span className="bg-amber-100 text-amber-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">BRIX {item.brix}</span>
             )}
           </div>
+          {item.description && (
+            <p className="text-xs text-gray-600 mt-2 leading-snug whitespace-pre-line">
+              {item.description}
+            </p>
+          )}
         </div>
       </div>
 
@@ -306,7 +371,7 @@ function ProduceCard({ item, whatsappLink }: { item: Produce; whatsappLink: stri
         </div>
       )}
 
-      <div className="px-3 pb-3 pt-2">
+      <div className="px-3 pb-3 pt-2 space-y-2">
         <a
           href={whatsappLink}
           target="_blank"
@@ -318,12 +383,20 @@ function ProduceCard({ item, whatsappLink }: { item: Produce; whatsappLink: stri
           </svg>
           {tx.orderWhatsApp}
         </a>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="w-full border border-red-200 text-red-600 font-semibold py-2.5 rounded-xl text-sm active:bg-red-50"
+          >
+            🗑 Delete / తొలగించు
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function ComingSoonCard({ item, farmerId }: { item: Produce; farmerId: string }) {
+function ComingSoonCard({ item, farmerId, onDelete }: { item: Produce; farmerId: string; onDelete?: () => void }) {
   const { tx } = useLang()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -372,6 +445,15 @@ function ComingSoonCard({ item, farmerId }: { item: Produce; farmerId: string })
             {loading ? tx.saving : tx.notifyMe}
           </button>
         </div>
+      )}
+
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="mt-3 w-full border border-red-200 text-red-600 font-semibold py-2.5 rounded-lg text-sm active:bg-red-50"
+        >
+          🗑 Delete / తొలగించు
+        </button>
       )}
     </div>
   )

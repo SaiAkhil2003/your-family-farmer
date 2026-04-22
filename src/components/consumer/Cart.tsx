@@ -14,6 +14,7 @@ export type CartItem = {
   farmerPhone: string
   farmerVillage: string
   farmerSlug: string
+  farmerPickupLocations?: string[]
 }
 
 export type CartState = Record<string, CartItem>
@@ -144,6 +145,7 @@ function CartSheet({
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [sentFarmers, setSentFarmers] = useState<Record<string, boolean>>({})
+  const [pickupByFarmer, setPickupByFarmer] = useState<Record<string, string>>({})
 
   useEffect(() => {
     setName(info.name)
@@ -169,15 +171,19 @@ function CartSheet({
       return `• ${it.emoji ?? '🌿'} ${it.name}${it.variety ? ` (${it.variety})` : ''} — ${it.qty} kg${price}`
     })
 
+    const selectedPickup = pickupByFarmer[f.farmerId]
+    const pickupLine = selectedPickup
+      ? `\n\n*Pickup location / పికప్ స్థలం:* ${selectedPickup} (${f.farmerVillage})`
+      : `\n\n*Pickup from your farm / మీ పొలం నుండి పికప్* (${f.farmerVillage})`
+
     const msg =
       `Hello ${f.farmerName} anna! 🙏\n` +
       `I saw your produce on YourFamilyFarmer and would like to order:\n\n` +
       lines.join('\n') +
-      `\n\n*Pickup from your farm* (${f.farmerVillage})\n\n` +
-      `My name: ${name.trim()}\n` +
-      `My WhatsApp: +91 ${phone.replace(/\D/g, '').slice(-10)}\n\n` +
-      `Please share a good pickup time. Thank you!\n` +
-      `ధన్యవాదాలు 🌱`
+      pickupLine +
+      `\n\nMy name / నా పేరు: ${name.trim()}\n` +
+      `My WhatsApp / నా వాట్సాప్: +91 ${phone.replace(/\D/g, '').slice(-10)}\n\n` +
+      `Please share a good pickup time. Thank you! / పికప్ సమయం తెలియజేయండి, ధన్యవాదాలు 🌱`
 
     const digits = f.farmerPhone.replace(/\D/g, '').replace(/^0+/, '')
     const waPhone = digits.length === 10 ? `91${digits}` : digits
@@ -306,10 +312,33 @@ function CartSheet({
 
                       {total > 0 && (
                         <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-2">
-                          <span className="text-xs text-gray-500">Estimated total</span>
+                          <span className="text-xs text-gray-500">Estimated total / మొత్తం</span>
                           <span className="font-extrabold text-gray-900">
                             ₹{total}
                           </span>
+                        </div>
+                      )}
+
+                      {f.farmerPickupLocations && f.farmerPickupLocations.length > 0 && (
+                        <div className="pt-2">
+                          <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1">
+                            Pickup location / పికప్ స్థలం
+                          </label>
+                          <select
+                            value={pickupByFarmer[f.farmerId] ?? ''}
+                            onChange={(e) =>
+                              setPickupByFarmer((prev) => ({
+                                ...prev,
+                                [f.farmerId]: e.target.value,
+                              }))
+                            }
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:border-green-500 focus:outline-none"
+                          >
+                            <option value="">Select a pickup point / స్థలం ఎంచుకోండి</option>
+                            {f.farmerPickupLocations.map((loc) => (
+                              <option key={loc} value={loc}>{loc}</option>
+                            ))}
+                          </select>
                         </div>
                       )}
 
