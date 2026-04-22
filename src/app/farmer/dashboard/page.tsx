@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import LanguageToggle from '@/components/LanguageToggle'
+import { useLang } from '@/lib/LanguageContext'
 
 type Farmer = {
   id: string
@@ -55,6 +56,7 @@ const isProfileComplete = (f: Farmer | null) =>
 
 export default function FarmerDashboard() {
   const router = useRouter()
+  const { tx } = useLang()
   const [farmer, setFarmer] = useState<Farmer | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -120,7 +122,7 @@ export default function FarmerDashboard() {
   if (notFound) return <FarmerNotFound onLogout={handleLogout} />
 
   const profileComplete = isProfileComplete(farmer)
-  const displayName = farmer!.name?.trim() || 'Welcome'
+  const displayName = farmer!.name?.trim() || tx.welcome
 
   return (
     <main className="min-h-screen bg-gray-50 pb-16">
@@ -132,13 +134,13 @@ export default function FarmerDashboard() {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-green-400 text-xs font-semibold mb-0.5 uppercase tracking-wide">
-              Farmer Dashboard / రైతు డాష్‌బోర్డ్
+              {tx.farmerDashboard}
             </p>
             <h1 className="text-white text-xl font-extrabold leading-tight">{displayName}</h1>
             <p className="text-green-300 text-sm mt-0.5">
               {profileComplete
                 ? `${farmer!.village}, ${farmer!.district}`
-                : 'Complete your profile to get started / ప్రొఫైల్ పూర్తి చేయండి'}
+                : tx.completeProfilePrompt}
             </p>
             <p className="text-green-500 text-xs mt-1">+91 {farmer!.phone}</p>
           </div>
@@ -148,21 +150,21 @@ export default function FarmerDashboard() {
                 href={`/farmer/${farmer!.slug}`}
                 className="bg-white text-green-800 text-xs font-bold px-3 py-2 rounded-xl"
               >
-                View profile / ప్రొఫైల్ ↗
+                {tx.viewProfile} ↗
               </Link>
             ) : (
               <span className="bg-amber-400 text-amber-900 text-[10px] font-bold px-2 py-1 rounded-full">
-                Incomplete / అసంపూర్ణం
+                {tx.incomplete}
               </span>
             )}
             <button
               onClick={() => setShowProfileEdit(true)}
               className="text-white text-xs underline"
             >
-              Edit profile / సవరించండి
+              {tx.editProfile}
             </button>
             <button onClick={handleLogout} className="text-green-500 text-xs underline">
-              Logout / లాగౌట్
+              {tx.logout}
             </button>
           </div>
         </div>
@@ -175,16 +177,16 @@ export default function FarmerDashboard() {
             <span className="text-2xl flex-shrink-0">📝</span>
             <div className="flex-1 min-w-0">
               <h3 className="font-extrabold text-amber-900 text-base leading-tight">
-                Complete your profile
+                {tx.completeProfileTitle}
               </h3>
               <p className="text-amber-700 text-xs mt-0.5">
-                ప్రొఫైల్ పూర్తి చేస్తే బయ్యర్లు మిమ్మల్ని కనుగొంటారు
+                {tx.completeProfileHelp}
               </p>
               <button
                 onClick={() => setShowProfileEdit(true)}
                 className="mt-3 bg-amber-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
               >
-                Fill details / వివరాలు నింపండి
+                {tx.fillDetails}
               </button>
             </div>
           </div>
@@ -197,21 +199,19 @@ export default function FarmerDashboard() {
             className="border-green-200 bg-green-50 border rounded-2xl p-4 text-left active:bg-green-100 relative"
           >
             <div className="text-3xl font-black text-green-800">{activeListings}</div>
-            <div className="text-sm font-semibold text-gray-800 mt-1 leading-tight">Active listings</div>
-            <div className="text-xs text-gray-500 mt-0.5">చురుకైన పంటలు</div>
+            <div className="text-sm font-semibold text-gray-800 mt-1 leading-tight">{tx.activeListings}</div>
             <div className="text-[11px] font-bold text-green-700 mt-2 flex items-center gap-1">
-              Manage / నిర్వహించు <span aria-hidden>→</span>
+              {tx.manage} <span aria-hidden>→</span>
             </div>
           </button>
           {[
-            { label: 'Orders this week', sub: 'ఈ వారం ఆర్డర్లు', value: ordersCount, color: 'border-blue-200 bg-blue-50', vcolor: 'text-blue-800' },
-            { label: 'Avg rating', sub: 'సగటు రేటింగ్', value: farmer!.rating_avg ? `${Number(farmer!.rating_avg).toFixed(1)} ★` : '—', color: 'border-amber-200 bg-amber-50', vcolor: 'text-amber-800' },
-            { label: 'Total buyers', sub: 'మొత్తం కొనుగోలుదారులు', value: farmer!.buyer_count ?? 0, color: 'border-purple-200 bg-purple-50', vcolor: 'text-purple-800' },
+            { label: tx.ordersThisWeek, value: ordersCount, color: 'border-blue-200 bg-blue-50', vcolor: 'text-blue-800' },
+            { label: tx.avgRating, value: farmer!.rating_avg ? `${Number(farmer!.rating_avg).toFixed(1)} ★` : '—', color: 'border-amber-200 bg-amber-50', vcolor: 'text-amber-800' },
+            { label: tx.totalBuyers, value: farmer!.buyer_count ?? 0, color: 'border-purple-200 bg-purple-50', vcolor: 'text-purple-800' },
           ].map((s) => (
             <div key={s.label} className={`${s.color} border rounded-2xl p-4`}>
               <div className={`text-3xl font-black ${s.vcolor}`}>{s.value}</div>
               <div className="text-sm font-semibold text-gray-800 mt-1 leading-tight">{s.label}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{s.sub}</div>
             </div>
           ))}
         </div>
@@ -219,19 +219,16 @@ export default function FarmerDashboard() {
         {/* Demand chart */}
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <h2 className="font-extrabold text-gray-900 text-base leading-tight">
-            Local demand / స్థానిక డిమాండ్
+            {tx.localDemand}
           </h2>
           <p className="text-xs text-gray-500 mt-0.5 mb-4">
-            మీ ప్రాంతంలో వినియోగదారులు ఏమి కోరుతున్నారు
+            {tx.localDemandHelp}
           </p>
 
           {demandBars.length === 0 ? (
             <div className="text-center py-6">
-              <p className="text-gray-400 text-sm">No demand signals yet. / ఇంకా డిమాండ్ లేదు.</p>
-              <p className="text-gray-400 text-xs mt-1">
-                Share your profile link to attract buyers.<br />
-                మీ ప్రొఫైల్ లింక్ షేర్ చేయండి.
-              </p>
+              <p className="text-gray-400 text-sm">{tx.noDemandSignals}</p>
+              <p className="text-gray-400 text-xs mt-1">{tx.shareProfileLink}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -264,13 +261,12 @@ export default function FarmerDashboard() {
               className="w-full bg-white border-2 border-green-700 text-green-700 font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 active:bg-green-50"
             >
               <span className="text-xl leading-none">+</span>
-              Add new produce / కొత్త పంట చేర్చండి
+              {tx.addNewProduce}
             </button>
           )
         ) : (
           <div className="w-full bg-gray-100 text-gray-500 font-semibold py-4 rounded-2xl text-sm text-center">
-            Complete your profile before adding produce<br />
-            <span className="text-xs">ముందుగా ప్రొఫైల్ పూర్తి చేయండి</span>
+            {tx.completeBeforeAdd}
           </div>
         )}
 
@@ -324,6 +320,7 @@ function ProfileEditModal({
   onClose: () => void
   onSaved: (updated: Farmer) => void
 }) {
+  const { tx } = useLang()
   const [name, setName] = useState(farmer.name ?? '')
   const [village, setVillage] = useState(farmer.village ?? '')
   const [district, setDistrict] = useState(farmer.district ?? '')
@@ -349,8 +346,8 @@ function ProfileEditModal({
     setPickupLocations((prev) => prev.filter((l) => l !== loc))
 
   const handleSave = async () => {
-    if (!name.trim()) { setError('Your name is required / మీ పేరు అవసరం'); return }
-    if (!village.trim()) { setError('Village is required / గ్రామం అవసరం'); return }
+    if (!name.trim()) { setError(tx.nameRequired); return }
+    if (!village.trim()) { setError(tx.villageRequired); return }
     setLoading(true)
     setError('')
 
@@ -390,7 +387,7 @@ function ProfileEditModal({
     setLoading(false)
 
     if (err || !data) {
-      setError(err?.message ?? 'Could not save. Please try again.')
+      setError(err?.message ?? tx.couldNotSave)
       return
     }
 
@@ -404,28 +401,28 @@ function ProfileEditModal({
         <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div>
             <h3 className="font-extrabold text-gray-900 text-base">
-              Your farmer profile / మీ రైతు ప్రొఫైల్
+              {tx.profileModalTitle}
             </h3>
-            <p className="text-xs text-gray-500">Fill in your details / మీ వివరాలు నింపండి</p>
+            <p className="text-xs text-gray-500">{tx.profileModalSubtitle}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 text-3xl leading-none p-1">×</button>
         </div>
 
         <div className="p-4 space-y-4">
           <Field
-            label="Your name / మీ పేరు *"
+            label={tx.yourNameLabel}
             placeholder="Ramu Reddy"
             value={name}
             onChange={setName}
           />
           <Field
-            label="Village / గ్రామం *"
+            label={tx.villageLabel}
             placeholder="Tadepalligudem"
             value={village}
             onChange={setVillage}
           />
           <Field
-            label="District / జిల్లా"
+            label={tx.districtLabel}
             placeholder="West Godavari"
             value={district}
             onChange={setDistrict}
@@ -433,22 +430,22 @@ function ProfileEditModal({
 
           <div>
             <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
-              Farming method / వ్యవసాయ పద్ధతి
+              {tx.farmingMethodLabel}
             </label>
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-green-500 focus:outline-none"
             >
-              <option value="natural">🌱 Natural / సహజం</option>
-              <option value="organic">🍃 Organic / సేంద్రీయ</option>
-              <option value="low_chemical">⚡ Low chemical / తక్కువ రసాయన</option>
-              <option value="chemical">Chemical / రసాయన</option>
+              <option value="natural">{tx.methodNatural}</option>
+              <option value="organic">{tx.methodOrganic}</option>
+              <option value="low_chemical">{tx.methodLowChemical}</option>
+              <option value="chemical">{tx.methodChemical}</option>
             </select>
           </div>
 
           <Field
-            label="Farming since (year) / ఏ సంవత్సరం నుండి"
+            label={tx.farmingSinceLabel}
             placeholder="e.g. 2005"
             value={sinceYear}
             onChange={setSinceYear}
@@ -457,16 +454,15 @@ function ProfileEditModal({
 
           <div>
             <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
-              Pickup locations / పికప్ స్థలాలు
+              {tx.pickupLocationsLabel}
             </label>
             <p className="text-[11px] text-gray-500 mb-2 leading-snug">
-              Where can buyers pick up? Add one at a time.<br />
-              కొనుగోలుదారులు ఎక్కడ పికప్ చేయగలరు?
+              {tx.pickupLocationsHelp}
             </p>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
-                placeholder="e.g. Bus stand / బస్ స్టాండ్"
+                placeholder={tx.pickupPlaceholder}
                 value={newPickup}
                 onChange={(e) => setNewPickup(e.target.value)}
                 onKeyDown={(e) => {
@@ -479,7 +475,7 @@ function ProfileEditModal({
                 onClick={addPickup}
                 className="bg-green-700 text-white font-bold px-4 rounded-xl text-sm"
               >
-                + Add
+                {tx.addBtn}
               </button>
             </div>
             {pickupLocations.length > 0 && (
@@ -513,7 +509,7 @@ function ProfileEditModal({
             disabled={loading || !name.trim() || !village.trim()}
             className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800"
           >
-            {loading ? 'Saving...' : 'Save profile / ప్రొఫైల్ సేవ్'}
+            {loading ? tx.saving : tx.saveProfile}
           </button>
         </div>
       </div>
@@ -564,6 +560,7 @@ function ProduceListingForm({
   onClose: () => void
   onPublished: () => void
 }) {
+  const { tx } = useLang()
   const [name, setName] = useState('')
   const [variety, setVariety] = useState('')
   const [emoji, setEmoji] = useState('🌿')
@@ -590,11 +587,11 @@ function ProduceListingForm({
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      setError('Please pick an image file / చిత్రం ఎంచుకోండి')
+      setError(tx.pickImageFile)
       return
     }
     if (file.size > 8 * 1024 * 1024) {
-      setError('Image is too large (max 8 MB) / చిత్రం 8 MB కంటే ఎక్కువ')
+      setError(tx.imageTooLarge)
       return
     }
     setError('')
@@ -633,7 +630,7 @@ function ProduceListingForm({
   }
 
   const handlePublish = async () => {
-    if (!name.trim()) { setError('Produce name is required'); return }
+    if (!name.trim()) { setError(tx.produceNameRequired); return }
     setLoading(true)
     setError('')
 
@@ -674,16 +671,13 @@ function ProduceListingForm({
     return (
       <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 text-center space-y-3">
         <div className="text-4xl">✅</div>
-        <p className="font-extrabold text-green-800 text-lg">Published! / ప్రచురించబడింది!</p>
-        <p className="text-green-700 text-sm">
-          Your listing is now live.<br />
-          మీ జాబితా ఇప్పుడు లైవ్‌లో ఉంది.
-        </p>
+        <p className="font-extrabold text-green-800 text-lg">{tx.publishedTitle}</p>
+        <p className="text-green-700 text-sm">{tx.listingLive}</p>
         <Link
           href={`/farmer/${publishedSlug}`}
           className="inline-block bg-green-700 text-white font-bold px-6 py-3 rounded-xl text-sm"
         >
-          View your profile / మీ ప్రొఫైల్ ↗
+          {tx.viewYourProfile} ↗
         </Link>
       </div>
     )
@@ -694,7 +688,7 @@ function ProduceListingForm({
       {/* Form header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
         <h3 className="font-extrabold text-gray-900 text-base">
-          New produce listing / కొత్త పంట జాబితా
+          {tx.newProduceListing}
         </h3>
         <button onClick={onClose} className="text-gray-400 text-2xl leading-none p-1">×</button>
       </div>
@@ -702,7 +696,7 @@ function ProduceListingForm({
       <div className="p-4 space-y-5">
         {/* Emoji picker */}
         <div>
-          <p className="text-xs font-semibold text-gray-600 mb-2">Pick an icon / ఐకాన్ ఎంచుకోండి</p>
+          <p className="text-xs font-semibold text-gray-600 mb-2">{tx.pickIcon}</p>
           <div className="flex flex-wrap gap-2">
             {EMOJI_OPTIONS.map((e) => (
               <button
@@ -721,18 +715,18 @@ function ProduceListingForm({
         {/* Name + variety */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Produce details / పంట వివరాలు
+            {tx.produceDetails}
           </label>
           <input
             type="text"
-            placeholder="Produce name * (e.g. Tomato / టమాటా)"
+            placeholder={tx.produceNamePlaceholder}
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
           />
           <input
             type="text"
-            placeholder="Variety (optional) / రకం (e.g. Naati heirloom)"
+            placeholder={tx.varietyPlaceholder}
             value={variety}
             onChange={(e) => setVariety(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
@@ -742,19 +736,19 @@ function ProduceListingForm({
         {/* Qty + period */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Availability / అందుబాటు
+            {tx.availability}
           </label>
           <div className="grid grid-cols-2 gap-2">
             <input
               type="number"
-              placeholder="Quantity (kg) / పరిమాణం"
+              placeholder={tx.quantityPlaceholder}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
             />
             <input
               type="text"
-              placeholder="Period / కాలం (e.g. Apr–May)"
+              placeholder={tx.periodPlaceholder}
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
@@ -765,37 +759,37 @@ function ProduceListingForm({
         {/* Farming method */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Farming method / వ్యవసాయ పద్ధతి
+            {tx.farmingMethodLabel}
           </label>
           <select
             value={farmingMethod}
             onChange={(e) => setFarmingMethod(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-green-500 focus:outline-none"
           >
-            <option value="natural">🌱 Natural / సహజం</option>
-            <option value="organic">🍃 Organic / సేంద్రీయ</option>
-            <option value="low_chemical">⚡ Low chemical</option>
-            <option value="chemical">Chemical</option>
+            <option value="natural">{tx.methodNatural}</option>
+            <option value="organic">{tx.methodOrganic}</option>
+            <option value="low_chemical">{tx.methodLowChemical}</option>
+            <option value="chemical">{tx.methodChemical}</option>
           </select>
         </div>
 
         {/* Delivery method */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Delivery method / డెలివరీ పద్ధతి
+            {tx.deliveryMethod}
           </label>
           <div className="grid grid-cols-2 gap-2">
             <div className="flex items-center gap-2 border-2 border-green-600 bg-green-50 rounded-xl px-3 py-3">
               <div className="w-4 h-4 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
                 <div className="w-1.5 h-1.5 bg-white rounded-full" />
               </div>
-              <span className="text-sm font-semibold text-green-800">Pickup only / పికప్ మాత్రమే</span>
+              <span className="text-sm font-semibold text-green-800">{tx.pickupOnly}</span>
             </div>
             <div className="flex items-center gap-2 border border-gray-200 bg-gray-50 rounded-xl px-3 py-3 opacity-50 cursor-not-allowed">
               <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
               <div>
-                <span className="text-sm font-medium text-gray-400">I will courier / కొరియర్</span>
-                <span className="block text-[10px] text-gray-400">Coming soon / త్వరలో</span>
+                <span className="text-sm font-medium text-gray-400">{tx.courierOption}</span>
+                <span className="block text-[10px] text-gray-400">{tx.courierComingSoon}</span>
               </div>
             </div>
           </div>
@@ -804,7 +798,7 @@ function ProduceListingForm({
         {/* Pricing tiers */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Pricing tiers / ధర శ్రేణులు
+            {tx.pricingTiers}
           </label>
           <div className="space-y-2">
             <div className="flex gap-2 items-center">
@@ -870,10 +864,10 @@ function ProduceListingForm({
         {/* Description */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Description / వివరణ — Growing notes
+            {tx.description}
           </label>
           <textarea
-            placeholder="Tell buyers how you grow this produce / మీరు ఎలా పండిస్తారో చెప్పండి (max 500 chars)"
+            placeholder={tx.descriptionPlaceholder}
             value={description}
             onChange={(e) => setDescription(e.target.value.slice(0, 500))}
             rows={3}
@@ -885,7 +879,7 @@ function ProduceListingForm({
         {/* Produce photo */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Photo (optional) / ఫోటో
+            {tx.photoOptional}
           </label>
           {imagePreview ? (
             <div className="relative">
@@ -905,27 +899,39 @@ function ProduceListingForm({
               </button>
             </div>
           ) : (
-            <label className="flex items-center justify-center gap-2 w-full border-2 border-dashed border-green-300 rounded-xl py-5 px-4 text-green-700 text-sm font-bold cursor-pointer active:bg-green-50">
-              <span className="text-xl leading-none">📷</span>
-              Take or pick photo / ఫోటో తీయండి
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handlePickImage}
-                className="hidden"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed border-green-300 rounded-xl py-4 px-3 text-green-700 text-sm font-bold cursor-pointer active:bg-green-50">
+                <span className="text-lg leading-none">📷</span>
+                {tx.takePhoto}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePickImage}
+                  className="hidden"
+                />
+              </label>
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed border-green-300 rounded-xl py-4 px-3 text-green-700 text-sm font-bold cursor-pointer active:bg-green-50">
+                <span className="text-lg leading-none">🖼</span>
+                {tx.fromGallery}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePickImage}
+                  className="hidden"
+                />
+              </label>
+            </div>
           )}
           <p className="text-[11px] text-gray-500">
-            Buyers will see this on the product card / కొనుగోలుదారులకు కనిపిస్తుంది
+            {tx.buyersSeeCard}
           </p>
         </div>
 
         {/* Quality params */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Quality parameters (optional) / నాణ్యత వివరాలు
+            {tx.qualityParams}
           </label>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -963,14 +969,14 @@ function ProduceListingForm({
             onClick={() => setPreview(true)}
             className="flex-1 border-2 border-gray-300 text-gray-700 font-semibold py-3.5 rounded-xl text-sm"
           >
-            Preview / ప్రివ్యూ
+            {tx.preview}
           </button>
           <button
             onClick={handlePublish}
             disabled={loading || !name.trim()}
             className="flex-1 bg-green-700 text-white font-bold py-3.5 rounded-xl text-sm disabled:opacity-50"
           >
-            {loading ? 'Publishing... / ప్రచురిస్తోంది' : 'Publish / ప్రచురించండి'}
+            {loading ? tx.publishing : tx.publish}
           </button>
         </div>
       </div>
@@ -985,6 +991,7 @@ function ProduceListingForm({
 
 /* ─── Preview modal ─────────────────────────────────────────── */
 function PreviewModal({ data, onClose }: { data: PreviewData; onClose: () => void }) {
+  const { tx } = useLang()
   const EMOJI_BG: Record<string, string> = {
     '🍅': 'bg-red-100', '🥬': 'bg-green-100', '🥭': 'bg-orange-100',
     '🍆': 'bg-purple-100', '🥕': 'bg-orange-100', '🌽': 'bg-yellow-100',
@@ -998,7 +1005,7 @@ function PreviewModal({ data, onClose }: { data: PreviewData; onClose: () => voi
       <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <p className="font-bold text-gray-800 text-sm">
-            Preview — how buyers see this / ప్రివ్యూ
+            {tx.previewHeading}
           </p>
           <button onClick={onClose} className="text-gray-400 text-2xl leading-none">×</button>
         </div>
@@ -1023,13 +1030,12 @@ function PreviewModal({ data, onClose }: { data: PreviewData; onClose: () => voi
                 <p className="text-xs text-gray-400 mt-1">{data.stock} kg left</p>
               )}
               <div className="mt-2 w-full bg-green-700 text-white text-xs font-bold py-2.5 rounded-xl text-center">
-                Order / ఆర్డర్
+                {tx.previewOrderBtn}
               </div>
             </div>
           </div>
           <p className="text-xs text-gray-400 text-center mt-3">
-            This is how the card appears to buyers.<br />
-            ఇది కొనుగోలుదారులకు ఎలా కనిపిస్తుందో.
+            {tx.previewFooter}
           </p>
         </div>
         <div className="px-4 pb-4">
@@ -1037,7 +1043,7 @@ function PreviewModal({ data, onClose }: { data: PreviewData; onClose: () => voi
             onClick={onClose}
             className="w-full border-2 border-gray-300 text-gray-700 font-semibold py-3 rounded-xl text-sm"
           >
-            Close / మూసివేయండి
+            {tx.close}
           </button>
         </div>
       </div>
@@ -1055,6 +1061,7 @@ function ManageListingsModal({
   onClose: () => void
   onChanged: () => void
 }) {
+  const { tx } = useLang()
   const [rows, setRows] = useState<ListingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -1075,10 +1082,7 @@ function ManageListingsModal({
   useEffect(() => { load() }, [load])
 
   const handleDelete = async (row: ListingRow) => {
-    const confirmMsg =
-      `Delete "${row.name}"? This removes it from your profile and from buyers everywhere.\n\n` +
-      `"${row.name}" తొలగించాలా? ఇది మీ ప్రొఫైల్ నుండి మరియు కొనుగోలుదారుల నుండి ప్రతిచోటా తొలగించబడుతుంది.`
-    if (!confirm(confirmMsg)) return
+    if (!confirm(tx.confirmDelete.replace('{name}', row.name))) return
 
     setDeletingId(row.id)
     setError('')
@@ -1090,13 +1094,11 @@ function ManageListingsModal({
     setDeletingId(null)
 
     if (err) {
-      setError(`Could not delete / తొలగించలేకపోయాము: ${err.message}`)
+      setError(err.message)
       return
     }
     if (!data || data.length === 0) {
-      setError(
-        'Delete blocked by database permissions. Add a DELETE RLS policy on produce_listings. / డేటాబేస్ అనుమతుల వల్ల తొలగింపు నిరోధించబడింది.',
-      )
+      setError(tx.deleteBlocked)
       return
     }
     setRows((prev) => prev.filter((r) => r.id !== row.id))
@@ -1109,11 +1111,9 @@ function ManageListingsModal({
         <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div>
             <h3 className="font-extrabold text-gray-900 text-base leading-tight">
-              Your produce / మీ పంటలు
+              {tx.yourProduce}
             </h3>
-            <p className="text-xs text-gray-500">
-              Manage or delete listings / జాబితాలను నిర్వహించండి లేదా తొలగించండి
-            </p>
+            <p className="text-xs text-gray-500">{tx.manageOrDelete}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 text-3xl leading-none p-1">×</button>
         </div>
@@ -1122,7 +1122,7 @@ function ManageListingsModal({
           {loading && (
             <div className="text-center py-10">
               <div className="w-10 h-10 border-4 border-green-700 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-gray-500 text-sm mt-3">Loading... / లోడ్ అవుతోంది...</p>
+              <p className="text-gray-500 text-sm mt-3">{tx.loadingLabel}</p>
             </div>
           )}
 
@@ -1133,8 +1133,7 @@ function ManageListingsModal({
           {!loading && rows.length === 0 && !error && (
             <div className="text-center py-10">
               <div className="text-5xl mb-2">🌾</div>
-              <p className="font-semibold text-gray-700 text-sm">No produce listed yet.</p>
-              <p className="text-gray-500 text-xs mt-1">ఇంకా పంట జాబితా చేయబడలేదు.</p>
+              <p className="font-semibold text-gray-700 text-sm">{tx.noProduceYet}</p>
             </div>
           )}
 
@@ -1153,7 +1152,7 @@ function ManageListingsModal({
             onClick={onClose}
             className="w-full border-2 border-gray-300 text-gray-700 font-semibold py-3 rounded-xl text-sm"
           >
-            Close / మూసివేయండి
+            {tx.close}
           </button>
         </div>
       </div>
@@ -1170,12 +1169,13 @@ function ListingRowCard({
   deleting: boolean
   onDelete: () => void
 }) {
+  const { tx } = useLang()
   const emoji = row.emoji ?? '🌿'
   const statusLabel =
     row.status === 'available'
-      ? 'Available / అందుబాటులో'
+      ? tx.availableLabel
       : row.status === 'coming_soon'
-      ? 'Coming soon / త్వరలో'
+      ? tx.comingSoon
       : row.status
   const statusColor =
     row.status === 'available'
@@ -1218,7 +1218,7 @@ function ListingRowCard({
               </span>
             )}
             {row.stock_qty != null && (
-              <span>{row.stock_qty} kg / కిలోలు</span>
+              <span>{row.stock_qty} {tx.kgLabel}</span>
             )}
             {row.method && (
               <span className="bg-green-50 text-green-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
@@ -1235,7 +1235,7 @@ function ListingRowCard({
           disabled={deleting}
           className="w-full border border-red-200 text-red-600 font-bold py-2.5 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
         >
-          {deleting ? 'Deleting... / తొలగిస్తోంది...' : '🗑 Delete produce / పంట తొలగించండి'}
+          {deleting ? tx.deleting : `🗑 ${tx.deleteProduce}`}
         </button>
       </div>
     </div>
@@ -1244,11 +1244,12 @@ function ListingRowCard({
 
 /* ─── Loading screen ────────────────────────────────────────── */
 function LoadingScreen() {
+  const { tx } = useLang()
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center space-y-3">
         <div className="w-12 h-12 border-4 border-green-700 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-gray-500 text-sm">Loading dashboard... / లోడ్ అవుతోంది...</p>
+        <p className="text-gray-500 text-sm">{tx.loadingLabel}</p>
       </div>
     </main>
   )
@@ -1256,17 +1257,15 @@ function LoadingScreen() {
 
 /* ─── Farmer not found ──────────────────────────────────────── */
 function FarmerNotFound({ onLogout }: { onLogout: () => void }) {
+  const { tx } = useLang()
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="text-center max-w-sm space-y-4">
         <div className="text-6xl">🌾</div>
-        <h2 className="text-xl font-extrabold text-gray-900">Session expired / సెషన్ ముగిసింది</h2>
-        <p className="text-gray-500 text-sm">
-          Please log in again with your WhatsApp number.<br />
-          మీ వాట్సాప్ నంబర్‌తో మళ్ళీ లాగిన్ అవ్వండి.
-        </p>
+        <h2 className="text-xl font-extrabold text-gray-900">{tx.sessionExpired}</h2>
+        <p className="text-gray-500 text-sm">{tx.sessionExpiredHelp}</p>
         <button onClick={onLogout} className="bg-green-700 text-white font-bold px-6 py-3 rounded-xl text-sm">
-          Log in again / మళ్ళీ లాగిన్
+          {tx.loginAgain}
         </button>
       </div>
     </main>

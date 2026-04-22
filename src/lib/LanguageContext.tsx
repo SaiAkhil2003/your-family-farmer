@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useContext, ReactNode } from 'react'
-import { t, bilingual, Language, TranslationKey } from './translations'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { t, Language, TranslationKey } from './translations'
 
 type LanguageContextType = {
   lang: Language
@@ -10,27 +10,31 @@ type LanguageContextType = {
   bi: (key: TranslationKey) => string
 }
 
-const biProxy = new Proxy({} as typeof t.en, {
-  get: (_, prop: string) => bilingual(prop as TranslationKey),
-}) as typeof t.en
-
 const LanguageContext = createContext<LanguageContextType>({
   lang: 'en',
   setLang: () => {},
-  tx: biProxy,
-  bi: (key) => bilingual(key),
+  tx: t.en,
+  bi: (key) => t.en[key] ?? '',
 })
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Language>('en')
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('yff_lang') : null
+    if (saved === 'en' || saved === 'te') setLangState(saved)
+  }, [])
+
+  const setLang = (next: Language) => {
+    setLangState(next)
+    if (typeof window !== 'undefined') localStorage.setItem('yff_lang', next)
+  }
+
+  const tx = t[lang]
+  const bi = (key: TranslationKey) => (t[lang] as Record<string, string>)[key] ?? t.en[key] ?? ''
+
   return (
-    <LanguageContext.Provider
-      value={{
-        lang: 'en',
-        setLang: () => {},
-        tx: biProxy,
-        bi: (key) => bilingual(key),
-      }}
-    >
+    <LanguageContext.Provider value={{ lang, setLang, tx, bi }}>
       {children}
     </LanguageContext.Provider>
   )
