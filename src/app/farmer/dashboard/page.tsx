@@ -665,6 +665,39 @@ function ProduceListingForm({
       imageUrl = existingImageUrl
     }
 
+    if (isEdit && editData) {
+      // Edit mode: always send all fields so clearing a value actually clears it in DB
+      const editPayload: Record<string, unknown> = {
+        name: name.trim(),
+        emoji,
+        method: farmingMethod,
+        unit,
+        variety: variety.trim() || null,
+        stock_qty: qty ? Number(qty) : null,
+        description: description.trim() || null,
+        brix: brix ? Number(brix) : null,
+        soil_organic_carbon: soc ? Number(soc) : null,
+        price_tier_1_price: price1 ? Number(price1) : null,
+        price_tier_1_qty: price1 ? Number(price1Qty) : null,
+        price_tier_2_price: price2 ? Number(price2) : null,
+        price_tier_2_qty: price2 ? Number(price2Qty) : null,
+        price_tier_3_price: price3 ? Number(price3) : null,
+        price_tier_3_qty: price3 ? Number(Number(price2Qty) + 1) : null,
+        image_url: imageUrl,
+      }
+      const res = await fetch('/api/farmer/update-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId: editData.id, farmerId, payload: editPayload }),
+      })
+      const json = await res.json().catch(() => ({}))
+      setLoading(false)
+      if (!res.ok) { setError(json.error ?? 'Could not save changes'); return }
+      onPublished()
+      return
+    }
+
+    // Insert mode: only include fields that have values
     const payload: Record<string, unknown> = {
       name: name.trim(),
       emoji,
@@ -681,14 +714,6 @@ function ProduceListingForm({
     if (price2) { payload.price_tier_2_price = Number(price2); payload.price_tier_2_qty = Number(price2Qty) }
     if (price3) { payload.price_tier_3_price = Number(price3); payload.price_tier_3_qty = Number(price2Qty) + 1 }
     payload.image_url = imageUrl
-
-    if (isEdit && editData) {
-      const { error: err } = await supabase.from('produce_listings').update(payload).eq('id', editData.id)
-      setLoading(false)
-      if (err) { setError(err.message); return }
-      onPublished()
-      return
-    }
 
     const insertPayload = { ...payload, farmer_id: farmerId, status: 'available' }
     const { error: err } = await supabase.from('produce_listings').insert(insertPayload)
