@@ -289,6 +289,8 @@ function ProduceCard({ item }: { item: ProduceListing }) {
   const [stockMsg, setStockMsg]   = useState('')
   const [adding, setAdding]       = useState(false)
 
+  useEffect(() => { setLiveStock(item.stock_qty ?? null) }, [item.stock_qty])
+
   const isOutOfStock = liveStock !== null && liveStock <= 0
   const atMax        = liveStock !== null && inCart != null && inCart.qty >= liveStock
 

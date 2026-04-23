@@ -577,7 +577,7 @@ function ProduceListingForm({
   defaultMethod: string
   editData?: ListingRow | null
   onClose: () => void
-  onPublished: () => void
+  onPublished: (saved?: Partial<ListingRow>) => void
 }) {
   const { tx } = useLang()
   const isEdit = !!editData
@@ -693,7 +693,7 @@ function ProduceListingForm({
       const json = await res.json().catch(() => ({}))
       setLoading(false)
       if (!res.ok) { setError(json.error ?? 'Could not save changes'); return }
-      onPublished()
+      onPublished(editPayload as Partial<ListingRow>)
       return
     }
 
@@ -1245,7 +1245,14 @@ function ManageListingsModal({
               defaultMethod={defaultMethod}
               editData={editingRow}
               onClose={() => setEditingRow(null)}
-              onPublished={() => { setEditingRow(null); load(); onChanged() }}
+              onPublished={(saved) => {
+                if (saved && editingRow) {
+                  setRows((prev) => prev.map((r) => r.id === editingRow.id ? { ...r, ...saved } : r))
+                }
+                setEditingRow(null)
+                load()
+                onChanged()
+              }}
             />
           </div>
         </div>
