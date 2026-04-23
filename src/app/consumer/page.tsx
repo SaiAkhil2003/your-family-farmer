@@ -99,11 +99,16 @@ export default function ConsumerPage() {
 
   useEffect(() => {
     fetchData()
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchData() }
+    document.addEventListener('visibilitychange', onVisible)
     const channel = supabase
       .channel('produce_listings_consumer')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'produce_listings' }, fetchData)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      supabase.removeChannel(channel)
+    }
   }, [fetchData])
 
   const doSearch = useCallback(async () => {
