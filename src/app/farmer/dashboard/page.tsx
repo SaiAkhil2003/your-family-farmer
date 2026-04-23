@@ -36,9 +36,25 @@ type ListingRow = {
   method: string | null
   stock_qty: number | null
   price_tier_1_price: number | null
+  price_tier_1_qty: number | null
+  price_tier_2_price: number | null
+  price_tier_2_qty: number | null
+  price_tier_3_price: number | null
+  description: string | null
   image_url: string | null
+  brix: number | null
+  soil_organic_carbon: number | null
+  unit: string | null
   created_at: string
 }
+
+const UNIT_OPTIONS = [
+  { value: 'kg', label: 'kg' },
+  { value: 'gram', label: 'gram' },
+  { value: 'piece', label: 'piece / నగ' },
+  { value: 'bunch', label: 'bunch / కట్ట' },
+  { value: 'litre', label: 'litre' },
+]
 
 type PreviewData = {
   name: string
@@ -80,14 +96,14 @@ export default function FarmerDashboard() {
     if (!farmerData) { setNotFound(true); setLoading(false); return }
     setFarmer(farmerData)
 
-    const [listingsRes, ordersRes, intentsRes] = await Promise.all([
+    const [listingsRes, waClicksRes, intentsRes] = await Promise.all([
       supabase.from('produce_listings').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerData.id).eq('status', 'available'),
-      supabase.from('orders').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerData.id).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+      supabase.from('wa_clicks').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerData.id).gte('clicked_at', new Date(Date.now() - 7 * 86400000).toISOString()),
       supabase.from('demand_intents').select('crop_name, quantity_kg').eq('region_slug', farmerData.region_slug).eq('fulfilled', false),
     ])
 
     setActiveListings(listingsRes.count ?? 0)
-    setOrdersCount(ordersRes.count ?? 0)
+    setOrdersCount(waClicksRes.count ?? 0)
 
     const map: Record<string, number> = {}
     for (const row of intentsRes.data ?? []) {
@@ -286,6 +302,7 @@ export default function FarmerDashboard() {
       {showListings && farmer && (
         <ManageListingsModal
           farmerId={farmer.id}
+          defaultMethod={farmer.method ?? 'natural'}
           onClose={() => setShowListings(false)}
           onChanged={loadDashboard}
         />
@@ -549,34 +566,39 @@ function Field({
 /* ─── Produce listing form ──────────────────────────────────── */
 function ProduceListingForm({
   farmerId,
-  farmerSlug,
+  farmerSlug = '',
   defaultMethod,
+  editData,
   onClose,
   onPublished,
 }: {
   farmerId: string
-  farmerSlug: string
+  farmerSlug?: string
   defaultMethod: string
+  editData?: ListingRow | null
   onClose: () => void
   onPublished: () => void
 }) {
   const { tx } = useLang()
-  const [name, setName] = useState('')
-  const [variety, setVariety] = useState('')
-  const [emoji, setEmoji] = useState('🌿')
-  const [qty, setQty] = useState('')
+  const isEdit = !!editData
+  const [name, setName] = useState(editData?.name ?? '')
+  const [variety, setVariety] = useState(editData?.variety ?? '')
+  const [emoji, setEmoji] = useState(editData?.emoji ?? '🌿')
+  const [qty, setQty] = useState(editData?.stock_qty != null ? String(editData.stock_qty) : '')
   const [period, setPeriod] = useState('')
-  const [farmingMethod, setFarmingMethod] = useState(defaultMethod || 'natural')
-  const [price1, setPrice1] = useState('')
-  const [price1Qty, setPrice1Qty] = useState('5')
-  const [price2, setPrice2] = useState('')
-  const [price2Qty, setPrice2Qty] = useState('20')
-  const [price3, setPrice3] = useState('')
-  const [description, setDescription] = useState('')
-  const [brix, setBrix] = useState('')
-  const [soc, setSoc] = useState('')
+  const [farmingMethod, setFarmingMethod] = useState(editData?.method ?? defaultMethod ?? 'natural')
+  const [price1, setPrice1] = useState(editData?.price_tier_1_price != null ? String(editData.price_tier_1_price) : '')
+  const [price1Qty, setPrice1Qty] = useState(editData?.price_tier_1_qty != null ? String(editData.price_tier_1_qty) : '5')
+  const [price2, setPrice2] = useState(editData?.price_tier_2_price != null ? String(editData.price_tier_2_price) : '')
+  const [price2Qty, setPrice2Qty] = useState(editData?.price_tier_2_qty != null ? String(editData.price_tier_2_qty) : '20')
+  const [price3, setPrice3] = useState(editData?.price_tier_3_price != null ? String(editData.price_tier_3_price) : '')
+  const [description, setDescription] = useState(editData?.description ?? '')
+  const [brix, setBrix] = useState(editData?.brix != null ? String(editData.brix) : '')
+  const [soc, setSoc] = useState(editData?.soil_organic_carbon != null ? String(editData.soil_organic_carbon) : '')
+  const [unit, setUnit] = useState(editData?.unit ?? 'kg')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
+  const [existingImageUrl, setExistingImageUrl] = useState(editData?.image_url ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(false)
@@ -604,6 +626,7 @@ function ProduceListingForm({
     if (imagePreview) URL.revokeObjectURL(imagePreview)
     setImageFile(null)
     setImagePreview('')
+    setExistingImageUrl('')
   }
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -638,26 +661,37 @@ function ProduceListingForm({
     if (imageFile) {
       imageUrl = await uploadImage(imageFile)
       if (!imageUrl) { setLoading(false); return }
+    } else if (existingImageUrl) {
+      imageUrl = existingImageUrl
     }
 
     const payload: Record<string, unknown> = {
-      farmer_id: farmerId,
       name: name.trim(),
       emoji,
-      status: 'available',
       method: farmingMethod,
+      unit,
     }
     if (variety.trim()) payload.variety = variety.trim()
     if (qty) payload.stock_qty = Number(qty)
     if (description.trim()) payload.description = description.trim()
+    else payload.description = null
     if (brix) payload.brix = Number(brix)
     if (soc) payload.soil_organic_carbon = Number(soc)
     if (price1) { payload.price_tier_1_price = Number(price1); payload.price_tier_1_qty = Number(price1Qty) }
     if (price2) { payload.price_tier_2_price = Number(price2); payload.price_tier_2_qty = Number(price2Qty) }
     if (price3) { payload.price_tier_3_price = Number(price3); payload.price_tier_3_qty = Number(price2Qty) + 1 }
-    if (imageUrl) payload.image_url = imageUrl
+    payload.image_url = imageUrl
 
-    const { error: err } = await supabase.from('produce_listings').insert(payload)
+    if (isEdit && editData) {
+      const { error: err } = await supabase.from('produce_listings').update(payload).eq('id', editData.id)
+      setLoading(false)
+      if (err) { setError(err.message); return }
+      onPublished()
+      return
+    }
+
+    const insertPayload = { ...payload, farmer_id: farmerId, status: 'available' }
+    const { error: err } = await supabase.from('produce_listings').insert(insertPayload)
     setLoading(false)
 
     if (err) { setError(err.message); return }
@@ -688,7 +722,7 @@ function ProduceListingForm({
       {/* Form header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
         <h3 className="font-extrabold text-gray-900 text-base">
-          {tx.newProduceListing}
+          {isEdit ? tx.editProduceListing : tx.newProduceListing}
         </h3>
         <button onClick={onClose} className="text-gray-400 text-2xl leading-none p-1">×</button>
       </div>
@@ -710,6 +744,22 @@ function ProduceListingForm({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Unit selector */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+            Unit / కొలత
+          </label>
+          <select
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:border-green-500 focus:outline-none"
+          >
+            {UNIT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Name + variety */}
@@ -741,7 +791,7 @@ function ProduceListingForm({
           <div className="grid grid-cols-2 gap-2">
             <input
               type="number"
-              placeholder={tx.quantityPlaceholder}
+              placeholder={`Quantity (${unit})`}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
@@ -805,17 +855,17 @@ function ProduceListingForm({
               <span className="text-xs text-gray-500 w-14 flex-shrink-0">Tier 1</span>
               <input
                 type="number"
-                placeholder={`Up to ${price1Qty} kg qty`}
+                placeholder={`Up to ${price1Qty}`}
                 value={price1Qty}
                 onChange={(e) => setPrice1Qty(e.target.value)}
                 className="w-20 border border-gray-200 rounded-lg px-2 py-2 text-sm"
               />
-              <span className="text-xs text-gray-400">kg →</span>
+              <span className="text-xs text-gray-400">{unit} →</span>
               <div className="flex-1 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
                 <input
                   type="number"
-                  placeholder="Price/kg"
+                  placeholder={`Price/${unit}`}
                   value={price1}
                   onChange={(e) => setPrice1(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg pl-7 pr-3 py-2 text-sm"
@@ -826,17 +876,17 @@ function ProduceListingForm({
               <span className="text-xs text-gray-500 w-14 flex-shrink-0">Tier 2</span>
               <input
                 type="number"
-                placeholder="Up to kg"
+                placeholder={`Up to`}
                 value={price2Qty}
                 onChange={(e) => setPrice2Qty(e.target.value)}
                 className="w-20 border border-gray-200 rounded-lg px-2 py-2 text-sm"
               />
-              <span className="text-xs text-gray-400">kg →</span>
+              <span className="text-xs text-gray-400">{unit} →</span>
               <div className="flex-1 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
                 <input
                   type="number"
-                  placeholder="Price/kg"
+                  placeholder={`Price/${unit}`}
                   value={price2}
                   onChange={(e) => setPrice2(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg pl-7 pr-3 py-2 text-sm"
@@ -845,13 +895,13 @@ function ProduceListingForm({
             </div>
             <div className="flex gap-2 items-center">
               <span className="text-xs text-gray-500 w-14 flex-shrink-0">Tier 3</span>
-              <span className="text-xs text-gray-400 w-20 text-center">{Number(price2Qty) + 1}+ kg</span>
+              <span className="text-xs text-gray-400 w-20 text-center">{Number(price2Qty) + 1}+ {unit}</span>
               <span className="text-xs text-gray-400">→</span>
               <div className="flex-1 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
                 <input
                   type="number"
-                  placeholder="Price/kg"
+                  placeholder={`Price/${unit}`}
                   value={price3}
                   onChange={(e) => setPrice3(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg pl-7 pr-3 py-2 text-sm"
@@ -881,11 +931,11 @@ function ProduceListingForm({
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
             {tx.photoOptional}
           </label>
-          {imagePreview ? (
+          {(imagePreview || existingImageUrl) ? (
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={imagePreview}
+                src={imagePreview || existingImageUrl}
                 alt="Preview"
                 className="w-full max-h-64 object-cover rounded-xl border border-gray-200 bg-gray-50"
               />
@@ -976,7 +1026,7 @@ function ProduceListingForm({
             disabled={loading || !name.trim()}
             className="flex-1 bg-green-700 text-white font-bold py-3.5 rounded-xl text-sm disabled:opacity-50"
           >
-            {loading ? tx.publishing : tx.publish}
+            {loading ? (isEdit ? tx.saving : tx.publishing) : (isEdit ? tx.saveChanges : tx.publish)}
           </button>
         </div>
       </div>
@@ -1054,10 +1104,12 @@ function PreviewModal({ data, onClose }: { data: PreviewData; onClose: () => voi
 /* ─── Manage listings modal ────────────────────────────────── */
 function ManageListingsModal({
   farmerId,
+  defaultMethod,
   onClose,
   onChanged,
 }: {
   farmerId: string
+  defaultMethod: string
   onClose: () => void
   onChanged: () => void
 }) {
@@ -1066,12 +1118,13 @@ function ManageListingsModal({
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [editingRow, setEditingRow] = useState<ListingRow | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     const { data, error: err } = await supabase
       .from('produce_listings')
-      .select('id, name, variety, emoji, status, method, stock_qty, price_tier_1_price, image_url, created_at')
+      .select('id, name, variety, emoji, status, method, stock_qty, price_tier_1_price, price_tier_1_qty, price_tier_2_price, price_tier_2_qty, price_tier_3_price, description, image_url, brix, soil_organic_carbon, unit, created_at')
       .eq('farmer_id', farmerId)
       .order('created_at', { ascending: false })
     setLoading(false)
@@ -1143,6 +1196,7 @@ function ManageListingsModal({
               row={row}
               deleting={deletingId === row.id}
               onDelete={() => handleDelete(row)}
+              onEdit={() => setEditingRow(row)}
             />
           ))}
         </div>
@@ -1156,6 +1210,21 @@ function ManageListingsModal({
           </button>
         </div>
       </div>
+
+      {/* Edit listing overlay */}
+      {editingRow && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
+            <ProduceListingForm
+              farmerId={farmerId}
+              defaultMethod={defaultMethod}
+              editData={editingRow}
+              onClose={() => setEditingRow(null)}
+              onPublished={() => { setEditingRow(null); load(); onChanged() }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1164,10 +1233,12 @@ function ListingRowCard({
   row,
   deleting,
   onDelete,
+  onEdit,
 }: {
   row: ListingRow
   deleting: boolean
   onDelete: () => void
+  onEdit: () => void
 }) {
   const { tx } = useLang()
   const emoji = row.emoji ?? '🌿'
@@ -1212,13 +1283,13 @@ function ListingRowCard({
           </div>
           <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
             {row.price_tier_1_price != null && (
-              <span className="font-semibold text-green-700">
+              <span className="font-bold text-green-700 text-sm">
                 ₹{row.price_tier_1_price}
-                <span className="text-gray-400 font-normal">/kg</span>
+                <span className="text-gray-400 font-normal text-xs">/{row.unit || 'kg'}</span>
               </span>
             )}
             {row.stock_qty != null && (
-              <span>{row.stock_qty} {tx.kgLabel}</span>
+              <span className="font-semibold text-gray-700">{row.stock_qty} {row.unit || tx.kgLabel}</span>
             )}
             {row.method && (
               <span className="bg-green-50 text-green-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
@@ -1229,11 +1300,17 @@ function ListingRowCard({
         </div>
       </div>
 
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3 flex gap-2">
+        <button
+          onClick={onEdit}
+          className="flex-1 border border-blue-200 text-blue-700 font-bold py-2.5 rounded-xl text-sm active:bg-blue-50"
+        >
+          ✏️ {tx.editListing}
+        </button>
         <button
           onClick={onDelete}
           disabled={deleting}
-          className="w-full border border-red-200 text-red-600 font-bold py-2.5 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
+          className="flex-1 border border-red-200 text-red-600 font-bold py-2.5 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
         >
           {deleting ? tx.deleting : `🗑 ${tx.deleteProduce}`}
         </button>

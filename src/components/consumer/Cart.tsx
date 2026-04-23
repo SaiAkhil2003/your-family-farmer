@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 
 export type CartItem = {
   listingId: string
@@ -14,6 +15,7 @@ export type CartItem = {
   priceTier2Qty?: number
   priceTier2Price?: number
   priceTier3Price?: number
+  unit?: string
   farmerId: string
   farmerName: string
   farmerPhone: string
@@ -102,10 +104,18 @@ export function useCart() {
 
   const clear = useCallback(() => writeCart({}), [])
 
+  const clearFarmer = useCallback((farmerId: string) => {
+    const next = { ...readCart() }
+    for (const key of Object.keys(next)) {
+      if (next[key].farmerId === farmerId) delete next[key]
+    }
+    writeCart(next)
+  }, [])
+
   const items = Object.values(cart)
   const count = items.reduce((sum, i) => sum + i.qty, 0)
 
-  return { cart, items, count, addItem, setQty, removeItem, clear }
+  return { cart, items, count, addItem, setQty, removeItem, clear, clearFarmer }
 }
 
 export function useConsumerInfo() {
@@ -163,7 +173,7 @@ function CartSheet({
   items: CartItem[]
   onClose: () => void
 }) {
-  const { setQty, removeItem, clear } = useCart()
+  const { setQty, removeItem, clear, clearFarmer } = useCart()
   const { info, save: saveInfo } = useConsumerInfo()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -190,8 +200,9 @@ function CartSheet({
 
     const f = group[0]
     const lines = group.map((it) => {
-      const price = it.pricePerKg ? ` @ ₹${it.pricePerKg}/kg` : ''
-      return `• ${it.emoji ?? '🌿'} ${it.name}${it.variety ? ` (${it.variety})` : ''} — ${it.qty} kg${price}`
+      const unit = it.unit || 'kg'
+      const price = it.pricePerKg ? ` @ ₹${it.pricePerKg}/${unit}` : ''
+      return `• ${it.emoji ?? '🌿'} ${it.name}${it.variety ? ` (${it.variety})` : ''} — ${it.qty} ${unit}${price}`
     })
 
     const selectedPickup = pickupByFarmer[f.farmerId]
@@ -213,6 +224,8 @@ function CartSheet({
     const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`
 
     window.open(waUrl, '_blank', 'noopener,noreferrer')
+    clearFarmer(f.farmerId)
+    supabase.from('wa_clicks').insert({ farmer_id: f.farmerId }).then()
     setSentFarmers((s) => ({ ...s, [f.farmerId]: true }))
   }
 
@@ -315,7 +328,7 @@ function CartSheet({
                               {it.name}
                             </p>
                             {it.pricePerKg && (
-                              <p className="text-xs text-gray-500">₹{it.pricePerKg}/kg</p>
+                              <p className="text-xs text-gray-500">₹{it.pricePerKg}/{it.unit || 'kg'}</p>
                             )}
                             {getActiveTier(it.qty, it).isDiscount && (
                               <p className="text-[10px] font-semibold text-green-700 mt-0.5">
