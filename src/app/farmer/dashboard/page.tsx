@@ -685,11 +685,18 @@ function ProduceListingForm({
         price_tier_3_qty: price3 ? Number(Number(price2Qty) + 1) : null,
         image_url: imageUrl,
       }
-      const res = await fetch('/api/farmer/update-listing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listingId: editData.id, farmerId, payload: editPayload }),
-      })
+      let res: Response
+      try {
+        res = await fetch('/api/farmer/update-listing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listingId: editData.id, farmerId, payload: editPayload }),
+        })
+      } catch {
+        setLoading(false)
+        setError('Network error — is the server running?')
+        return
+      }
       const json = await res.json().catch(() => ({}))
       setLoading(false)
       if (!res.ok) { setError(json.error ?? 'Could not save changes'); return }
