@@ -324,6 +324,7 @@ function ProduceCard({ item }: { item: ProduceListing }) {
       variety: item.variety,
       emoji: item.emoji,
       unit,
+      stockQty: fresh != null ? fresh : (item.stock_qty ?? undefined),
       pricePerKg: item.price_tier_1_price,
       priceTier1Qty: item.price_tier_1_qty,
       priceTier1Price: item.price_tier_1_price,

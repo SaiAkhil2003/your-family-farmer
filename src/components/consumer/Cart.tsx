@@ -16,6 +16,7 @@ export type CartItem = {
   priceTier2Price?: number
   priceTier3Price?: number
   unit?: string
+  stockQty?: number
   farmerId: string
   farmerName: string
   farmerPhone: string
@@ -78,7 +79,8 @@ export function useCart() {
   const addItem = useCallback((item: Omit<CartItem, 'qty'>, qty = 1) => {
     const next = { ...readCart() }
     const existing = next[item.listingId]
-    const newQty = Math.max(1, (existing?.qty ?? 0) + qty)
+    const rawQty = Math.max(1, (existing?.qty ?? 0) + qty)
+    const newQty = item.stockQty != null ? Math.min(rawQty, item.stockQty) : rawQty
     const merged = { ...item, qty: newQty }
     const { price } = getActiveTier(newQty, merged)
     next[item.listingId] = { ...merged, pricePerKg: price ?? item.pricePerKg }
@@ -89,8 +91,10 @@ export function useCart() {
     const next = { ...readCart() }
     if (qty <= 0) delete next[listingId]
     else if (next[listingId]) {
-      const updated = { ...next[listingId], qty }
-      const { price } = getActiveTier(qty, updated)
+      const existing = next[listingId]
+      const cappedQty = existing.stockQty != null ? Math.min(qty, existing.stockQty) : qty
+      const updated = { ...existing, qty: cappedQty }
+      const { price } = getActiveTier(cappedQty, updated)
       next[listingId] = { ...updated, pricePerKg: price ?? updated.pricePerKg }
     }
     writeCart(next)
@@ -179,6 +183,12 @@ function CartSheet({
   const [phone, setPhone] = useState('')
   const [sentFarmers, setSentFarmers] = useState<Record<string, boolean>>({})
   const [pickupByFarmer, setPickupByFarmer] = useState<Record<string, string>>({})
+  const [toast, setToast] = useState('')
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
 
   useEffect(() => {
     setName(info.name)
@@ -231,6 +241,14 @@ function CartSheet({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-5 left-0 right-0 flex justify-center z-[60] pointer-events-none px-4">
+          <div className="bg-gray-900 text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-xl">
+            {toast}
+          </div>
+        </div>
+      )}
       <div className="bg-white w-full max-w-md rounded-t-3xl max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100 rounded-t-3xl">
@@ -338,8 +356,15 @@ function CartSheet({
                           </div>
                           <QtyStepper
                             qty={it.qty}
+                            maxQty={it.stockQty}
                             onDec={() => setQty(it.listingId, it.qty - 1)}
-                            onInc={() => setQty(it.listingId, it.qty + 1)}
+                            onInc={() => {
+                              if (it.stockQty != null && it.qty >= it.stockQty) {
+                                showToast('No more stock available / స్టాక్ అయిపోయింది')
+                                return
+                              }
+                              setQty(it.listingId, it.qty + 1)
+                            }}
                           />
                           <button
                             onClick={() => removeItem(it.listingId)}
@@ -433,11 +458,14 @@ function QtyStepper({
   qty,
   onDec,
   onInc,
+  maxQty,
 }: {
   qty: number
   onDec: () => void
   onInc: () => void
+  maxQty?: number
 }) {
+  const atMax = maxQty != null && qty >= maxQty
   return (
     <div className="flex items-center border border-gray-200 rounded-full">
       <button
@@ -452,7 +480,12 @@ function QtyStepper({
       </span>
       <button
         onClick={onInc}
-        className="w-8 h-8 text-lg text-gray-700 flex items-center justify-center active:bg-gray-100 rounded-r-full"
+        disabled={atMax}
+        className={`w-8 h-8 text-lg flex items-center justify-center rounded-r-full ${
+          atMax
+            ? 'text-gray-300 cursor-not-allowed'
+            : 'text-gray-700 active:bg-gray-100'
+        }`}
         aria-label="Increase"
       >
         +
