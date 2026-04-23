@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   vegetables: [
     'tomato', 'capsicum', 'brinjal', 'eggplant', 'bean', 'pea', 'pumpkin',

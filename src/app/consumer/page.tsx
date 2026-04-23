@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import GlobalNav from '@/components/consumer/GlobalNav'
 import { CartFab, useCart } from '@/components/consumer/Cart'
+import { supabase } from '@/lib/supabase'
 
 type Farmer = {
   id: string
@@ -30,6 +31,7 @@ type ProduceListing = {
   price_tier_3_price?: number
   price_tier_3_qty?: number
   stock_qty?: number
+  unit?: string
   available_to?: string
   farmer_id: string
   farmer?: Farmer
@@ -76,14 +78,12 @@ export default function ConsumerPage() {
   const [loading, setLoading]         = useState(true)
   const [farmerCount, setFarmerCount] = useState(0)
 
-  useEffect(() => { fetchData() }, [])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const [avRes, csRes] = await Promise.all([
-        fetch('/api/produce'),
-        fetch('/api/produce?status=coming_soon'),
+        fetch('/api/produce', { cache: 'no-store' }),
+        fetch('/api/produce?status=coming_soon', { cache: 'no-store' }),
       ])
       const av: ProduceListing[] = await avRes.json().catch(() => [])
       const cs: ProduceListing[] = await csRes.json().catch(() => [])
@@ -95,7 +95,16 @@ export default function ConsumerPage() {
       setFarmerCount(new Set(avArr.map((p) => p.farmer_id)).size)
     } catch { /* silent */ }
     setLoading(false)
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+    const channel = supabase
+      .channel('produce_listings_consumer')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'produce_listings' }, fetchData)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchData])
 
   const doSearch = useCallback(async () => {
     if (!search && method === 'all' && category === 'all') {
@@ -107,7 +116,7 @@ export default function ConsumerPage() {
       if (search)              p.set('q', search)
       if (method !== 'all')    p.set('method', method)
       if (category !== 'all')  p.set('category', category)
-      const res = await fetch(`/api/produce/search?${p}`)
+      const res = await fetch(`/api/produce/search?${p}`, { cache: 'no-store' })
       const data = await res.json().catch(() => [])
       setFiltered(Array.isArray(data) ? data : [])
     } catch { /* silent */ }
@@ -257,26 +266,64 @@ export default function ConsumerPage() {
 
 /* ─── Produce card ──────────────────────────────────────── */
 function ProduceCard({ item }: { item: ProduceListing }) {
-  const emoji    = item.emoji ?? '🌿'
-  const emojiBg  = EMOJI_BG[emoji] ?? 'bg-green-50'
-  const method   = item.method?.toLowerCase() ?? 'natural'
-  const badge    = METHOD_STYLE[method]  ?? 'bg-green-100 text-green-800'
+  const emoji      = item.emoji ?? '🌿'
+  const emojiBg    = EMOJI_BG[emoji] ?? 'bg-green-50'
+  const method     = item.method?.toLowerCase() ?? 'natural'
+  const badge      = METHOD_STYLE[method]  ?? 'bg-green-100 text-green-800'
   const badgeLabel = METHOD_LABEL[method] ?? 'Natural'
-  const farmer   = item.farmer
+  const farmer     = item.farmer
   const farmerHref = farmer ? `/farmer/${farmer.slug}` : '#'
+  const unit       = item.unit || 'kg'
 
   const { cart, addItem, setQty } = useCart()
   const inCart = cart[item.id]
 
   const canAdd = !!farmer && !!farmer.phone
 
-  const handleAdd = () => {
+  const [liveStock, setLiveStock] = useState<number | null>(item.stock_qty ?? null)
+  const [stockMsg, setStockMsg]   = useState('')
+  const [adding, setAdding]       = useState(false)
+
+  const isOutOfStock = liveStock !== null && liveStock <= 0
+  const atMax        = liveStock !== null && inCart != null && inCart.qty >= liveStock
+
+  const handleAdd = async () => {
     if (!farmer) return
+    setAdding(true)
+    setStockMsg('')
+
+    const { data } = await supabase
+      .from('produce_listings')
+      .select('stock_qty')
+      .eq('id', item.id)
+      .single()
+
+    const fresh = data?.stock_qty ?? null
+    if (fresh !== null) setLiveStock(fresh)
+    setAdding(false)
+
+    if (fresh !== null) {
+      if (fresh <= 0) {
+        setStockMsg('Out of stock / అయిపోయింది')
+        return
+      }
+      const curQty = inCart?.qty ?? 0
+      if (curQty >= fresh) {
+        setStockMsg(`Maximum available / గరిష్ట పరిమాణం: ${fresh} ${unit}`)
+        return
+      }
+      if (curQty + 1 > fresh) {
+        setStockMsg(`Stock updated / స్టాక్ మారింది, only ${fresh} ${unit} available`)
+        return
+      }
+    }
+
     addItem({
       listingId: item.id,
       name: item.name,
       variety: item.variety,
       emoji: item.emoji,
+      unit,
       pricePerKg: item.price_tier_1_price,
       priceTier1Qty: item.price_tier_1_qty,
       priceTier1Price: item.price_tier_1_price,
@@ -292,9 +339,18 @@ function ProduceCard({ item }: { item: ProduceListing }) {
     }, 1)
   }
 
+  const handleInc = () => {
+    if (liveStock !== null && inCart.qty >= liveStock) {
+      setStockMsg(`Maximum available / గరిష్ట పరిమాణం: ${liveStock} ${unit}`)
+      return
+    }
+    setStockMsg('')
+    setQty(item.id, inCart.qty + 1)
+  }
+
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col">
-      {/* Image (or emoji fallback) — taps go to farmer profile */}
+      {/* Image (or emoji fallback) */}
       <Link href={farmerHref}>
         {item.image_url ? (
           <div className="bg-gray-100 aspect-[4/3] overflow-hidden">
@@ -333,17 +389,26 @@ function ProduceCard({ item }: { item: ProduceListing }) {
         <div className="flex items-center justify-between mt-1">
           <span className="text-green-700 font-black text-lg">
             {item.price_tier_1_price ? `₹${item.price_tier_1_price}` : '—'}
-            <span className="text-xs font-normal text-gray-400">/kg</span>
+            <span className="text-xs font-normal text-gray-400">/{unit}</span>
           </span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge}`}>
             {badgeLabel}
           </span>
         </div>
 
-        {/* Stock */}
-        {item.stock_qty != null && (
-          <p className="text-xs text-gray-400">
-            {item.stock_qty} kg left / మిగిలాయి
+        {/* Stock display */}
+        {liveStock != null && (
+          <p className={`text-xs font-medium ${liveStock === 0 ? 'text-red-500' : 'text-gray-400'}`}>
+            {liveStock === 0
+              ? 'Out of stock / అయిపోయింది'
+              : `${liveStock} ${unit} left / మిగిలాయి`}
+          </p>
+        )}
+
+        {/* Stock warning */}
+        {stockMsg && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 leading-snug text-center">
+            {stockMsg}
           </p>
         )}
 
@@ -355,28 +420,41 @@ function ProduceCard({ item }: { item: ProduceListing }) {
           >
             View / చూడండి
           </Link>
+        ) : isOutOfStock ? (
+          <button
+            disabled
+            className="mt-2 w-full bg-gray-200 text-gray-500 font-bold py-3 rounded-xl text-sm cursor-not-allowed"
+          >
+            Out of stock / అయిపోయింది
+          </button>
         ) : !inCart ? (
           <button
             onClick={handleAdd}
-            className="mt-2 w-full bg-green-700 active:bg-green-800 text-white font-bold py-3 rounded-xl text-sm"
+            disabled={adding}
+            className="mt-2 w-full bg-green-700 active:bg-green-800 text-white font-bold py-3 rounded-xl text-sm disabled:opacity-60"
           >
-            + Add to cart / చేర్చు
+            {adding ? 'Checking... / తనిఖీ' : '+ Add to cart / చేర్చు'}
           </button>
         ) : (
           <div className="mt-2 flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-2 py-1.5">
             <button
-              onClick={() => setQty(item.id, inCart.qty - 1)}
+              onClick={() => { setQty(item.id, inCart.qty - 1); setStockMsg('') }}
               className="w-8 h-8 rounded-lg bg-white border border-green-300 text-green-800 text-lg font-bold"
               aria-label="Decrease"
             >
               −
             </button>
             <span className="font-extrabold text-green-900 text-sm">
-              {inCart.qty} kg
+              {inCart.qty} {unit}
             </span>
             <button
-              onClick={() => setQty(item.id, inCart.qty + 1)}
-              className="w-8 h-8 rounded-lg bg-green-700 text-white text-lg font-bold"
+              onClick={handleInc}
+              disabled={atMax}
+              className={`w-8 h-8 rounded-lg text-lg font-bold transition-colors ${
+                atMax
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-700 text-white'
+              }`}
               aria-label="Increase"
             >
               +
