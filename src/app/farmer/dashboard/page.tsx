@@ -686,21 +686,17 @@ function ProduceListingForm({
         price_tier_3_qty: price3 ? Number(Number(price2Qty) + 1) : null,
         image_url: imageUrl,
       }
-      let res: Response
-      try {
-        res = await fetch('/api/farmer/update-listing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ listingId: editData.id, farmerId, payload: editPayload }),
-        })
-      } catch {
-        setLoading(false)
-        setError('Network error — is the server running?')
-        return
-      }
-      const json = await res.json().catch(() => ({}))
+
+      // Update directly via supabase client — same pattern as INSERT so RLS rules apply identically.
+      // .eq('farmer_id', farmerId) acts as the ownership guard.
+      const { error: updateErr } = await supabase
+        .from('produce_listings')
+        .update(editPayload)
+        .eq('id', editData.id)
+        .eq('farmer_id', farmerId)
+
       setLoading(false)
-      if (!res.ok) { setError(json.error ?? 'Could not save changes'); return }
+      if (updateErr) { setError(updateErr.message); return }
       setSaved(true)
       setTimeout(() => onPublished(editPayload as Partial<ListingRow>), 1200)
       return
