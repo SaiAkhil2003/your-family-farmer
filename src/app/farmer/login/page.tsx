@@ -32,6 +32,11 @@ export default function FarmerLoginPage() {
 
     let farmer = farmers?.[0]
 
+    // Ensure returning farmers have active=true (may be null for older/seeded records)
+    if (farmer) {
+      await supabase.from('farmers').update({ active: true }).eq('id', farmer.id)
+    }
+
     // 2. If not found, auto-create a minimal farmer record.
     if (!farmer) {
       const rand = Math.random().toString(36).slice(2, 6)

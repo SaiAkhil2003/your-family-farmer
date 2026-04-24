@@ -604,6 +604,7 @@ function ProduceListingForm({
   const [preview, setPreview] = useState(false)
   const [published, setPublished] = useState(false)
   const [publishedSlug, setPublishedSlug] = useState('')
+  const [saved, setSaved] = useState(false)
 
   const handlePickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -700,7 +701,8 @@ function ProduceListingForm({
       const json = await res.json().catch(() => ({}))
       setLoading(false)
       if (!res.ok) { setError(json.error ?? 'Could not save changes'); return }
-      onPublished(editPayload as Partial<ListingRow>)
+      setSaved(true)
+      setTimeout(() => onPublished(editPayload as Partial<ListingRow>), 1200)
       return
     }
 
@@ -745,6 +747,15 @@ function ProduceListingForm({
         >
           {tx.viewYourProfile} ↗
         </Link>
+      </div>
+    )
+  }
+
+  if (saved && isEdit) {
+    return (
+      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 text-center space-y-3">
+        <div className="text-4xl">✅</div>
+        <p className="font-extrabold text-green-800 text-lg">{tx.savedTitle}</p>
       </div>
     )
   }
