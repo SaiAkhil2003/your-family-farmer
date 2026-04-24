@@ -1,12 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
@@ -19,7 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Verify this listing belongs to the farmer before updating
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await supabase
     .from('produce_listings')
     .select('id')
     .eq('id', listingId)
@@ -30,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Listing not found or access denied' }, { status: 403 })
   }
 
-  const { error } = await supabaseAdmin
+  const { error } = await supabase
     .from('produce_listings')
     .update(payload)
     .eq('id', listingId)
