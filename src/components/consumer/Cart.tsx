@@ -233,6 +233,24 @@ function CartSheet({
     const waPhone = digits.length === 10 ? `91${digits}` : digits
     const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`
 
+    const buyerPhone = phone.replace(/\D/g, '').slice(-10)
+    for (const it of group) {
+      supabase.from('orders').insert({
+        farmer_id: it.farmerId,
+        produce_listing_id: it.listingId,
+        produce_name: it.name,
+        quantity: it.qty,
+        unit: it.unit || 'kg',
+        total_price: it.pricePerKg ? Math.round(it.pricePerKg * it.qty) : null,
+        buyer_name: name.trim(),
+        buyer_phone: buyerPhone,
+        pickup_location: selectedPickup || null,
+        status: 'pending',
+      }).then(({ error }) => {
+        if (error) console.error('[YFF] Order save failed:', error.message, error.details, error.hint)
+      })
+    }
+
     window.open(waUrl, '_blank', 'noopener,noreferrer')
     clearFarmer(f.farmerId)
     supabase.from('wa_clicks').insert({ farmer_id: f.farmerId }).then()

@@ -6,6 +6,7 @@ import RegionMap from './RegionMap'
 import FarmersTab from './tabs/FarmersTab'
 import BrowseProduceTab from './tabs/BrowseProduceTab'
 import AddFarmerTab from './tabs/AddFarmerTab'
+import { CartFab } from '@/components/consumer/Cart'
 
 const CATEGORY_MAP: Record<string, string[]> = {
   Vegetables: ['Tomato', 'Brinjal', 'Drumstick', 'Bitter Gourd', 'Raw Banana'],
@@ -109,6 +110,8 @@ export default function RegionContent({
         {activeTab === 1 && <BrowseProduceTab produce={filteredProduce} farmers={farmers} />}
         {activeTab === 2 && <AddFarmerTab farmerCount={farmers.length} />}
       </div>
+
+      <CartFab />
     </div>
   )
 }

@@ -48,7 +48,7 @@ export default function TabSection({ farmer, produce, reviews, media }: Props) {
         {activeTab === 0 && <StoryTab farmer={farmer} />}
         {activeTab === 1 && <ProduceTab farmer={farmer} produce={produce} isEditMode={isEditMode} />}
         {activeTab === 2 && <QualityTab farmer={farmer} produce={produce} />}
-        {activeTab === 3 && <ReviewsTab reviews={reviews} />}
+        {activeTab === 3 && <ReviewsTab reviews={reviews} farmerId={farmer.id as string} />}
         {activeTab === 4 && <FarmMediaTab media={media} />}
       </div>
     </div>

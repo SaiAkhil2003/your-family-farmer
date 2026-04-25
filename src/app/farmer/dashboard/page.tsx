@@ -48,6 +48,21 @@ type ListingRow = {
   created_at: string
 }
 
+type Order = {
+  id: string
+  farmer_id: string
+  produce_listing_id: string | null
+  produce_name: string | null
+  quantity: number | null
+  unit: string | null
+  total_price: number | null
+  buyer_name: string | null
+  buyer_phone: string | null
+  pickup_location: string | null
+  status: 'pending' | 'approved' | 'declined'
+  created_at: string
+}
+
 const UNIT_OPTIONS = [
   { value: 'kg', label: 'kg' },
   { value: 'gram', label: 'gram' },
@@ -77,7 +92,11 @@ export default function FarmerDashboard() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [activeListings, setActiveListings] = useState(0)
-  const [ordersCount, setOrdersCount] = useState(0)
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([])
+  const [approvedCount, setApprovedCount] = useState(0)
+  const [totalRevenue, setTotalRevenue] = useState(0)
+  const [ordersFilter, setOrdersFilter] = useState<'today' | 'week' | 'month'>('week')
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null)
   const [demandBars, setDemandBars] = useState<DemandBar[]>([])
   const [showForm, setShowForm] = useState(false)
   const [showProfileEdit, setShowProfileEdit] = useState(false)
@@ -96,14 +115,18 @@ export default function FarmerDashboard() {
     if (!farmerData) { setNotFound(true); setLoading(false); return }
     setFarmer(farmerData)
 
-    const [listingsRes, waClicksRes, intentsRes] = await Promise.all([
+    const [listingsRes, pendingRes, approvedRes, intentsRes] = await Promise.all([
       supabase.from('produce_listings').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerData.id).eq('status', 'available'),
-      supabase.from('wa_clicks').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerData.id).gte('clicked_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+      supabase.from('orders').select('*').eq('farmer_id', farmerData.id).eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('orders').select('id, total_price').eq('farmer_id', farmerData.id).eq('status', 'approved').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
       supabase.from('demand_intents').select('crop_name, quantity_kg').eq('region_slug', farmerData.region_slug).eq('fulfilled', false),
     ])
 
     setActiveListings(listingsRes.count ?? 0)
-    setOrdersCount(waClicksRes.count ?? 0)
+    setPendingOrders((pendingRes.data ?? []) as Order[])
+    const approved = approvedRes.data ?? []
+    setApprovedCount(approved.length)
+    setTotalRevenue(approved.reduce((sum, o) => sum + (o.total_price ?? 0), 0))
 
     const map: Record<string, number> = {}
     for (const row of intentsRes.data ?? []) {
@@ -133,6 +156,33 @@ export default function FarmerDashboard() {
     localStorage.removeItem('yff_farmer_slug')
     router.replace('/farmer/login')
   }
+
+  const handleApprove = async (orderId: string) => {
+    setProcessingOrderId(orderId)
+    await supabase.from('orders').update({ status: 'approved' }).eq('id', orderId)
+    setPendingOrders((prev) => prev.filter((o) => o.id !== orderId))
+    setApprovedCount((c) => c + 1)
+    setProcessingOrderId(null)
+  }
+
+  const handleDecline = async (orderId: string) => {
+    setProcessingOrderId(orderId)
+    await supabase.from('orders').update({ status: 'declined' }).eq('id', orderId)
+    setPendingOrders((prev) => prev.filter((o) => o.id !== orderId))
+    setProcessingOrderId(null)
+  }
+
+  const filteredPendingOrders = pendingOrders.filter((o) => {
+    const t = new Date(o.created_at).getTime()
+    const now = Date.now()
+    if (ordersFilter === 'today') {
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      return t >= todayStart.getTime()
+    }
+    if (ordersFilter === 'week') return t >= now - 7 * 86400000
+    return t >= now - 30 * 86400000
+  })
 
   if (loading) return <LoadingScreen />
   if (notFound) return <FarmerNotFound onLogout={handleLogout} />
@@ -221,15 +271,66 @@ export default function FarmerDashboard() {
             </div>
           </button>
           {[
-            { label: tx.ordersThisWeek, value: ordersCount, color: 'border-blue-200 bg-blue-50', vcolor: 'text-blue-800' },
-            { label: tx.avgRating, value: farmer!.rating_avg ? `${Number(farmer!.rating_avg).toFixed(1)} ★` : '—', color: 'border-amber-200 bg-amber-50', vcolor: 'text-amber-800' },
-            { label: tx.totalBuyers, value: farmer!.buyer_count ?? 0, color: 'border-purple-200 bg-purple-50', vcolor: 'text-purple-800' },
+            { label: tx.pendingOrders, value: pendingOrders.length, color: pendingOrders.length > 0 ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-gray-50', vcolor: pendingOrders.length > 0 ? 'text-orange-700' : 'text-gray-500' },
+            { label: tx.approvedThisWeek, value: approvedCount, color: 'border-green-200 bg-green-50', vcolor: 'text-green-800' },
+            { label: tx.totalRevenue, value: totalRevenue > 0 ? `₹${totalRevenue}` : '—', color: 'border-purple-200 bg-purple-50', vcolor: 'text-purple-800' },
           ].map((s) => (
             <div key={s.label} className={`${s.color} border rounded-2xl p-4`}>
               <div className={`text-3xl font-black ${s.vcolor}`}>{s.value}</div>
               <div className="text-sm font-semibold text-gray-800 mt-1 leading-tight">{s.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* Orders section */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
+            <div>
+              <h2 className="font-extrabold text-gray-900 text-base leading-tight">
+                {tx.ordersTab}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">Pending orders need your response</p>
+            </div>
+            <Link href="/farmer/dashboard/orders" className="text-xs font-bold text-green-700">
+              {tx.viewOrderHistory}
+            </Link>
+          </div>
+
+          <div className="px-4 pt-3 pb-2 flex gap-2">
+            {(['today', 'week', 'month'] as const).map((period) => (
+              <button
+                key={period}
+                onClick={() => setOrdersFilter(period)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                  ordersFilter === period
+                    ? 'bg-green-700 text-white'
+                    : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                }`}
+              >
+                {period === 'today' ? tx.filterToday : period === 'week' ? tx.filterWeek : tx.filterMonth}
+              </button>
+            ))}
+          </div>
+
+          <div className="px-4 pb-4 space-y-3">
+            {filteredPendingOrders.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-2">📭</div>
+                <p className="font-semibold text-gray-500 text-sm">{tx.noPendingOrders}</p>
+                <p className="text-xs text-gray-400 mt-1">{tx.noPendingHelp}</p>
+              </div>
+            ) : (
+              filteredPendingOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  processing={processingOrderId === order.id}
+                  onApprove={() => handleApprove(order.id)}
+                  onDecline={() => handleDecline(order.id)}
+                />
+              ))
+            )}
+          </div>
         </div>
 
         {/* Demand chart */}
@@ -1364,6 +1465,86 @@ function ListingRowCard({
           className="flex-1 border border-red-200 text-red-600 font-bold py-2.5 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
         >
           {deleting ? tx.deleting : `🗑 ${tx.deleteProduce}`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Order card ─────────────────────────────────────────────── */
+function OrderCard({
+  order,
+  processing,
+  onApprove,
+  onDecline,
+}: {
+  order: Order
+  processing: boolean
+  onApprove: () => void
+  onDecline: () => void
+}) {
+  const { tx } = useLang()
+
+  const timeAgo = (ts: string) => {
+    const diff = Date.now() - new Date(ts).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="p-3 space-y-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-extrabold text-gray-900 text-sm leading-tight">
+              {order.buyer_name || '—'}
+            </p>
+            {order.buyer_phone && (
+              <a href={`tel:+91${order.buyer_phone}`} className="text-xs font-semibold text-green-700">
+                📞 +91 {order.buyer_phone}
+              </a>
+            )}
+          </div>
+          <span className="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
+            {timeAgo(order.created_at)}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="font-semibold text-gray-800">{order.produce_name || '—'}</span>
+          <span className="text-gray-300">·</span>
+          <span className="text-gray-600">{order.quantity} {order.unit || 'kg'}</span>
+          {order.total_price != null && order.total_price > 0 && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="font-bold text-green-700">₹{order.total_price}</span>
+            </>
+          )}
+        </div>
+
+        {order.pickup_location && (
+          <p className="text-xs text-gray-500">📍 {order.pickup_location}</p>
+        )}
+      </div>
+
+      <div className="px-3 pb-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={onApprove}
+          disabled={processing}
+          className="bg-green-600 text-white font-bold py-3 rounded-xl text-sm active:bg-green-700 disabled:opacity-50"
+        >
+          {processing ? tx.approving : `✓ ${tx.approve}`}
+        </button>
+        <button
+          onClick={onDecline}
+          disabled={processing}
+          className="border-2 border-red-300 text-red-600 font-bold py-3 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
+        >
+          {processing ? tx.declining : `✕ ${tx.decline}`}
         </button>
       </div>
     </div>
