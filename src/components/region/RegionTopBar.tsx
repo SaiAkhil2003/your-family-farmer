@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useLang } from '@/lib/LanguageContext'
 import LanguageToggle from '@/components/LanguageToggle'
 
@@ -30,18 +29,7 @@ export default function RegionTopBar({ region }: { region: Record<string, unknow
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <LanguageToggle />
-        <Link
-          href="/farmer/dashboard"
-          className="flex items-center gap-1 bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-xl active:bg-green-800"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d="M3 12l9-9 9 9M5 10v10h14V10" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Home / హోమ్
-        </Link>
-      </div>
+      <LanguageToggle />
     </div>
   )
 }

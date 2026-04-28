@@ -5,6 +5,7 @@ import { useLang } from '@/lib/LanguageContext'
 type Farmer = {
   soil_organic_carbon?: number
   soil_ph?: number
+  pesticide_cert_url?: string | null
 }
 
 type Produce = {
@@ -70,6 +71,26 @@ export default function QualityTab({
         <h3 className="text-sm font-bold text-amber-900 mb-2">{tx.whatIsBrix}</h3>
         <p className="text-xs text-amber-800 leading-relaxed">{tx.brixExplainer}</p>
       </div>
+
+      {/* Pesticide test certificate */}
+      {f.pesticide_cert_url && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-extrabold text-green-900">{tx.pesticideCertLabel}</p>
+              <p className="text-xs text-green-700 mt-0.5">{tx.certUploaded}</p>
+            </div>
+            <a
+              href={f.pesticide_cert_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-green-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl whitespace-nowrap"
+            >
+              {tx.viewCertificate}
+            </a>
+          </div>
+        </div>
+      )}
 
       {available.some((p) => p.storage_notes) && (
         <div>

@@ -188,6 +188,13 @@ export const t = {
     orderHistory: 'Order History',
     approving: 'Approving...',
     declining: 'Declining...',
+    markPaid: 'Mark paid / చెల్లింపు అందింది',
+    markingPaid: 'Saving...',
+    codBadge: 'COD / నగదు',
+    paymentReceived: 'Payment received / చెల్లింపు అందింది',
+    paymentMethodCod: 'Cash on Delivery / నగదు చెల్లింపు',
+    paymentMethodUpi: 'UPI Payment / యూపీఐ చెల్లింపు',
+    upiComingSoon: 'Coming soon / త్వరలో వస్తుంది',
     manage: 'Manage',
     localDemand: 'Local demand',
     localDemandHelp: 'What buyers in your area want',
@@ -289,6 +296,63 @@ export const t = {
     orderBtn: 'Order via WhatsApp',
     viewFarmerBtn: 'View farmer',
     comingSoonBadge: 'Coming soon',
+
+    // OTP login
+    sendOtp: 'Send OTP',
+    enterOtp: 'Enter OTP code',
+    otpSentMsg: 'OTP sent to +91 {phone}',
+    verifyOtp: 'Verify & Login',
+    otpPlaceholder: '6-digit code',
+    resendOtp: 'Resend OTP',
+    otpInvalid: 'Invalid OTP. Please try again.',
+    otpExpiredMsg: 'OTP expired. Request a new one.',
+    sending: 'Sending...',
+    verifying: 'Verifying...',
+    changeNumber: 'Change number',
+
+    // Harvest date / freshness
+    harvestDateLabel: 'Harvest date (when picked)',
+    harvestToday: '🟢 Picked today',
+    harvestYesterday: '🟡 Picked yesterday',
+    harvestDaysAgo: '🔴 Picked {n} days ago',
+
+    // Farm cover photo & avatar
+    coverPhotoLabel: 'Farm cover photo',
+    coverPhotoHelp: 'Shown at the top of your public profile page',
+    avatarLabel: 'Your photo (optional)',
+    avatarHelp: 'Shown next to your name on your profile',
+
+    // Pesticide test certificate
+    pesticideCertLabel: 'Pesticide test certificate',
+    pesticideCertHelp: 'Upload a photo of your lab test result — builds buyer trust',
+    viewCertificate: 'View test certificate',
+    certUploaded: '✓ Certificate uploaded',
+    uploadCert: 'Upload certificate photo',
+    removeCert: 'Remove',
+
+    // Pickup schedule
+    pickupScheduleLabel: 'Pickup schedule',
+    pickupScheduleHelp: 'Set days & time buyers can pick up from your farm',
+    pickupDays: 'Available days',
+    pickupFrom: 'From',
+    pickupTo: 'To',
+    pickupSchedulePreview: 'Pickup: {days} · {from}–{to}',
+    noScheduleSet: 'No schedule set yet',
+
+    // Earnings summary
+    earningsTitle: 'Earnings this month',
+    earningsRevenue: '₹{amount} earned',
+    earningsOrders: 'from {n} orders',
+    earningsNoData: 'No approved orders this month yet.',
+    weekLabel: 'Wk {n}',
+
+    // Consumer order history
+    myOrders: 'My Orders / నా ఆర్డర్లు',
+    enterPhoneForOrders: 'Enter your WhatsApp number to see your past orders',
+    lookupOrders: 'View my orders',
+    noOrdersYet: 'No orders found for this number.',
+    orderedFrom: 'From',
+    pickedUpAt: 'Pickup',
   },
 
   te: {
@@ -478,6 +542,13 @@ export const t = {
     orderHistory: 'ఆర్డర్ చరిత్ర',
     approving: 'అంగీకరిస్తోంది...',
     declining: 'తిరస్కరిస్తోంది...',
+    markPaid: 'చెల్లింపు అందింది',
+    markingPaid: 'సేవ్ అవుతోంది...',
+    codBadge: 'నగదు',
+    paymentReceived: 'చెల్లింపు అందింది',
+    paymentMethodCod: 'నగదు చెల్లింపు',
+    paymentMethodUpi: 'యూపీఐ చెల్లింపు',
+    upiComingSoon: 'త్వరలో వస్తుంది',
     manage: 'నిర్వహించు',
     localDemand: 'స్థానిక డిమాండ్',
     localDemandHelp: 'మీ ప్రాంతంలో వినియోగదారులు ఏమి కోరుతున్నారు',
@@ -579,6 +650,63 @@ export const t = {
     orderBtn: 'వాట్సాప్ లో ఆర్డర్',
     viewFarmerBtn: 'రైతు చూడండి',
     comingSoonBadge: 'త్వరలో వస్తుంది',
+
+    // OTP login
+    sendOtp: 'OTP పంపండి',
+    enterOtp: 'OTP కోడ్ నమోదు చేయండి',
+    otpSentMsg: '+91 {phone} కు OTP పంపబడింది',
+    verifyOtp: 'ధృవీకరించి లాగిన్',
+    otpPlaceholder: '6 అంకెల కోడ్',
+    resendOtp: 'OTP మళ్ళీ పంపండి',
+    otpInvalid: 'తప్పు OTP. దయచేసి మళ్ళీ ప్రయత్నించండి.',
+    otpExpiredMsg: 'OTP గడువు ముగిసింది. కొత్తది అభ్యర్థించండి.',
+    sending: 'పంపుతోంది...',
+    verifying: 'ధృవీకరిస్తోంది...',
+    changeNumber: 'నంబర్ మార్చండి',
+
+    // Harvest date / freshness
+    harvestDateLabel: 'కోసిన తేదీ',
+    harvestToday: '🟢 ఈరోజు కోశారు',
+    harvestYesterday: '🟡 నిన్న కోశారు',
+    harvestDaysAgo: '🔴 {n} రోజుల క్రితం కోశారు',
+
+    // Farm cover photo & avatar
+    coverPhotoLabel: 'పొలం కవర్ ఫోటో',
+    coverPhotoHelp: 'మీ పబ్లిక్ ప్రొఫైల్ పైభాగంలో కనిపిస్తుంది',
+    avatarLabel: 'మీ ఫోటో (ఐచ్ఛికం)',
+    avatarHelp: 'మీ ప్రొఫైల్‌లో మీ పేరు పక్కన కనిపిస్తుంది',
+
+    // Pesticide test certificate
+    pesticideCertLabel: 'పురుగుమందు పరీక్ష సర్టిఫికెట్',
+    pesticideCertHelp: 'లాబ్ పరీక్ష ఫోటో అప్‌లోడ్ చేయండి — కొనుగోలుదారుల నమ్మకం పెరుగుతుంది',
+    viewCertificate: 'పరీక్ష సర్టిఫికెట్ చూడండి',
+    certUploaded: '✓ సర్టిఫికెట్ అప్‌లోడ్ అయింది',
+    uploadCert: 'సర్టిఫికెట్ ఫోటో అప్‌లోడ్',
+    removeCert: 'తొలగించు',
+
+    // Pickup schedule
+    pickupScheduleLabel: 'పికప్ సమయం',
+    pickupScheduleHelp: 'మీరు పికప్ కోసం ఏ రోజులు అందుబాటులో ఉంటారు?',
+    pickupDays: 'అందుబాటు రోజులు',
+    pickupFrom: 'మొదటి సమయం',
+    pickupTo: 'చివరి సమయం',
+    pickupSchedulePreview: 'పికప్: {days} · {from}–{to}',
+    noScheduleSet: 'ఇంకా సమయం నిర్ణయించలేదు',
+
+    // Earnings summary
+    earningsTitle: 'ఈ నెల ఆదాయం',
+    earningsRevenue: '₹{amount} సంపాదించారు',
+    earningsOrders: '{n} ఆర్డర్ల నుండి',
+    earningsNoData: 'ఈ నెల ఇంకా ఆర్డర్లు లేవు.',
+    weekLabel: 'వా {n}',
+
+    // Consumer order history
+    myOrders: 'నా ఆర్డర్లు',
+    enterPhoneForOrders: 'మీ గత ఆర్డర్లు చూడటానికి వాట్సాప్ నంబర్ నమోదు చేయండి',
+    lookupOrders: 'నా ఆర్డర్లు చూడండి',
+    noOrdersYet: 'ఈ నంబర్‌కు ఆర్డర్లు కనుగొనబడలేదు.',
+    orderedFrom: 'నుండి',
+    pickedUpAt: 'పికప్',
   },
 }
 

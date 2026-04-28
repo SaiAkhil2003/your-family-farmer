@@ -1,10 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { LanguageProvider } from "@/lib/LanguageContext";
 
 export const metadata: Metadata = {
   title: "YourFamilyFarmer — Natural food from farmers near you",
   description: "Buy natural produce directly from farmers in Andhra Pradesh. No middlemen.",
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

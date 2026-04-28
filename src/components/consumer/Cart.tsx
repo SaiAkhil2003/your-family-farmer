@@ -3,6 +3,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
+type PickupSlots = {
+  days: string[]
+  time_from: string
+  time_to: string
+}
+
 export type CartItem = {
   listingId: string
   qty: number
@@ -23,6 +29,7 @@ export type CartItem = {
   farmerVillage: string
   farmerSlug: string
   farmerPickupLocations?: string[]
+  farmerPickupSlots?: PickupSlots | null
 }
 
 export type CartState = Record<string, CartItem>
@@ -153,7 +160,8 @@ export function CartFab() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-5 right-5 z-40 bg-green-700 active:bg-green-800 text-white rounded-full shadow-2xl flex items-center gap-2 pl-4 pr-5 py-3.5"
+          className="fixed bottom-6 right-4 z-40 bg-green-700 active:bg-green-800 text-white rounded-full shadow-2xl flex items-center gap-2 pl-4 pr-5 py-3.5"
+          style={{ bottom: 'max(24px, env(safe-area-inset-bottom, 24px))' }}
           aria-label="View cart"
         >
           <CartIcon />
@@ -181,8 +189,10 @@ function CartSheet({
   const { info, save: saveInfo } = useConsumerInfo()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'cod'>('cod')
   const [sentFarmers, setSentFarmers] = useState<Record<string, boolean>>({})
   const [pickupByFarmer, setPickupByFarmer] = useState<Record<string, string>>({})
+  const [pickupDayByFarmer, setPickupDayByFarmer] = useState<Record<string, string>>({})
   const [toast, setToast] = useState('')
 
   const showToast = (msg: string) => {
@@ -216,16 +226,20 @@ function CartSheet({
     })
 
     const selectedPickup = pickupByFarmer[f.farmerId]
+    const selectedDay    = pickupDayByFarmer[f.farmerId]
     const pickupLine = selectedPickup
       ? `\n\n*Pickup location / పికప్ స్థలం:* ${selectedPickup} (${f.farmerVillage})`
       : `\n\n*Pickup from your farm / మీ పొలం నుండి పికప్* (${f.farmerVillage})`
+    const dayLine = selectedDay ? `\n*Pickup day / రోజు:* ${selectedDay}` : ''
 
     const msg =
       `Hello ${f.farmerName} anna! 🙏\n` +
       `I saw your produce on YourFamilyFarmer and would like to order:\n\n` +
       lines.join('\n') +
       pickupLine +
-      `\n\nMy name / నా పేరు: ${name.trim()}\n` +
+      dayLine +
+      `\n\n*Payment: Cash on Delivery / చెల్లింపు: నగదు డెలివరీ సమయంలో*\n\n` +
+      `My name / నా పేరు: ${name.trim()}\n` +
       `My WhatsApp / నా వాట్సాప్: +91 ${phone.replace(/\D/g, '').slice(-10)}\n\n` +
       `Please share a good pickup time. Thank you! / పికప్ సమయం తెలియజేయండి, ధన్యవాదాలు 🌱`
 
@@ -235,7 +249,7 @@ function CartSheet({
 
     const buyerPhone = phone.replace(/\D/g, '').slice(-10)
     for (const it of group) {
-      supabase.from('orders').insert({
+      const baseRow = {
         farmer_id: it.farmerId,
         produce_listing_id: it.listingId,
         produce_name: it.name,
@@ -246,9 +260,17 @@ function CartSheet({
         buyer_phone: buyerPhone,
         pickup_location: selectedPickup || null,
         status: 'pending',
-      }).then(({ error }) => {
-        if (error) console.error('[YFF] Order save failed:', error.message, error.details, error.hint)
-      })
+      }
+      supabase.from('orders').insert({ ...baseRow, payment_method: paymentMethod, payment_status: 'pending' })
+        .then(async ({ error }) => {
+          if (error?.message?.includes('payment_method') || error?.message?.includes('payment_status')) {
+            // Columns not yet migrated — save without them so the order still goes through
+            const { error: err2 } = await supabase.from('orders').insert(baseRow)
+            if (err2) console.error('[YFF] Order save failed:', err2.message)
+          } else if (error) {
+            console.error('[YFF] Order save failed:', error.message, error.details, error.hint)
+          }
+        })
     }
 
     window.open(waUrl, '_blank', 'noopener,noreferrer')
@@ -326,6 +348,38 @@ function CartSheet({
                   The farmer needs this to confirm pickup time.<br />
                   పికప్ సమయం కోసం రైతుకు ఇది అవసరం.
                 </p>
+              </div>
+
+              {/* Payment method selection */}
+              <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Payment method / చెల్లింపు విధానం
+                </p>
+                <button
+                  onClick={() => setPaymentMethod('cod')}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-sm font-bold transition-colors ${
+                    paymentMethod === 'cod'
+                      ? 'border-green-600 bg-green-50 text-green-900'
+                      : 'border-gray-200 bg-white text-gray-700'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-base">💵</span>
+                    Cash on Delivery / నగదు చెల్లింపు
+                  </span>
+                  {paymentMethod === 'cod' && (
+                    <span className="text-green-600 text-base">✓</span>
+                  )}
+                </button>
+                <div className="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-100 text-sm font-bold text-gray-400 cursor-not-allowed">
+                  <span className="flex items-center gap-2">
+                    <span className="text-base opacity-50">📲</span>
+                    UPI Payment / యూపీఐ చెల్లింపు
+                  </span>
+                  <span className="text-[10px] font-bold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full whitespace-nowrap">
+                    Coming soon / త్వరలో వస్తుంది
+                  </span>
+                </div>
               </div>
 
               {/* Farmer groups */}
@@ -421,6 +475,32 @@ function CartSheet({
                             <option value="">Select a pickup point / స్థలం ఎంచుకోండి</option>
                             {f.farmerPickupLocations.map((loc) => (
                               <option key={loc} value={loc}>{loc}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {f.farmerPickupSlots && f.farmerPickupSlots.days.length > 0 && (
+                        <div className="pt-2">
+                          <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1">
+                            Pickup day / పికప్ రోజు
+                          </label>
+                          <p className="text-[11px] text-green-700 font-medium mb-1.5">
+                            Available {f.farmerPickupSlots.time_from}–{f.farmerPickupSlots.time_to}
+                          </p>
+                          <select
+                            value={pickupDayByFarmer[f.farmerId] ?? ''}
+                            onChange={(e) =>
+                              setPickupDayByFarmer((prev) => ({
+                                ...prev,
+                                [f.farmerId]: e.target.value,
+                              }))
+                            }
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:border-green-500 focus:outline-none"
+                          >
+                            <option value="">Select a day / రోజు ఎంచుకోండి</option>
+                            {f.farmerPickupSlots.days.map((day) => (
+                              <option key={day} value={day}>{day}</option>
                             ))}
                           </select>
                         </div>

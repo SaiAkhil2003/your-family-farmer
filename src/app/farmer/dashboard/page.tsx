@@ -6,6 +6,14 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import LanguageToggle from '@/components/LanguageToggle'
 import { useLang } from '@/lib/LanguageContext'
+import LocationSearch from '@/components/LocationSearch'
+import { FreshnessBadge } from '@/components/FreshnessBadge'
+
+type PickupSlots = {
+  days: string[]
+  time_from: string
+  time_to: string
+}
 
 type Farmer = {
   id: string
@@ -20,6 +28,13 @@ type Farmer = {
   buyer_count: number
   farming_since_year: number | null
   pickup_locations: string[] | null
+  cover_photo_url: string | null
+  photo_url: string | null
+  pesticide_cert_url: string | null
+  pickup_slots: PickupSlots | null
+  lat: number | null
+  lng: number | null
+  location_name: string | null
 }
 
 type DemandBar = {
@@ -45,6 +60,7 @@ type ListingRow = {
   brix: number | null
   soil_organic_carbon: number | null
   unit: string | null
+  harvest_date: string | null
   created_at: string
 }
 
@@ -60,6 +76,8 @@ type Order = {
   buyer_phone: string | null
   pickup_location: string | null
   status: 'pending' | 'approved' | 'declined'
+  payment_method: string | null
+  payment_status: string | null
   created_at: string
 }
 
@@ -97,7 +115,11 @@ export default function FarmerDashboard() {
   const [totalRevenue, setTotalRevenue] = useState(0)
   const [ordersFilter, setOrdersFilter] = useState<'today' | 'week' | 'month'>('week')
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null)
+  const [processingPaidId, setProcessingPaidId] = useState<string | null>(null)
   const [demandBars, setDemandBars] = useState<DemandBar[]>([])
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0)
+  const [monthlyOrderCount, setMonthlyOrderCount] = useState(0)
+  const [weeklyEarnings, setWeeklyEarnings] = useState<number[]>([0, 0, 0, 0])
   const [showForm, setShowForm] = useState(false)
   const [showProfileEdit, setShowProfileEdit] = useState(false)
   const [showListings, setShowListings] = useState(false)
@@ -115,11 +137,16 @@ export default function FarmerDashboard() {
     if (!farmerData) { setNotFound(true); setLoading(false); return }
     setFarmer(farmerData)
 
-    const [listingsRes, pendingRes, approvedRes, intentsRes] = await Promise.all([
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+
+    const [listingsRes, pendingRes, approvedRes, intentsRes, monthlyRes] = await Promise.all([
       supabase.from('produce_listings').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerData.id).eq('status', 'available'),
       supabase.from('orders').select('*').eq('farmer_id', farmerData.id).eq('status', 'pending').order('created_at', { ascending: false }),
       supabase.from('orders').select('id, total_price').eq('farmer_id', farmerData.id).eq('status', 'approved').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
       supabase.from('demand_intents').select('crop_name, quantity_kg').eq('region_slug', farmerData.region_slug).eq('fulfilled', false),
+      supabase.from('orders').select('id, total_price, created_at').eq('farmer_id', farmerData.id).eq('status', 'approved').gte('created_at', monthStart.toISOString()),
     ])
 
     setActiveListings(listingsRes.count ?? 0)
@@ -127,6 +154,20 @@ export default function FarmerDashboard() {
     const approved = approvedRes.data ?? []
     setApprovedCount(approved.length)
     setTotalRevenue(approved.reduce((sum, o) => sum + (o.total_price ?? 0), 0))
+
+    // Monthly earnings
+    const monthly = monthlyRes.data ?? []
+    setMonthlyRevenue(monthly.reduce((sum, o) => sum + (o.total_price ?? 0), 0))
+    setMonthlyOrderCount(monthly.length)
+
+    // Break into 4 weekly buckets (days 1-7, 8-14, 15-21, 22+)
+    const weeks = [0, 0, 0, 0]
+    for (const o of monthly) {
+      const day = new Date(o.created_at).getDate()
+      const bucket = day <= 7 ? 0 : day <= 14 ? 1 : day <= 21 ? 2 : 3
+      weeks[bucket] += o.total_price ?? 0
+    }
+    setWeeklyEarnings(weeks)
 
     const map: Record<string, number> = {}
     for (const row of intentsRes.data ?? []) {
@@ -170,6 +211,15 @@ export default function FarmerDashboard() {
     await supabase.from('orders').update({ status: 'declined' }).eq('id', orderId)
     setPendingOrders((prev) => prev.filter((o) => o.id !== orderId))
     setProcessingOrderId(null)
+  }
+
+  const handleMarkPaid = async (orderId: string) => {
+    setProcessingPaidId(orderId)
+    await supabase.from('orders').update({ payment_status: 'completed' }).eq('id', orderId)
+    setPendingOrders((prev) =>
+      prev.map((o) => o.id === orderId ? { ...o, payment_status: 'completed' } : o)
+    )
+    setProcessingPaidId(null)
   }
 
   const filteredPendingOrders = pendingOrders.filter((o) => {
@@ -282,6 +332,13 @@ export default function FarmerDashboard() {
           ))}
         </div>
 
+        {/* Monthly earnings summary */}
+        <EarningsCard
+          revenue={monthlyRevenue}
+          orderCount={monthlyOrderCount}
+          weekly={weeklyEarnings}
+        />
+
         {/* Orders section */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-gray-100">
@@ -325,8 +382,10 @@ export default function FarmerDashboard() {
                   key={order.id}
                   order={order}
                   processing={processingOrderId === order.id}
+                  processingPaid={processingPaidId === order.id}
                   onApprove={() => handleApprove(order.id)}
                   onDecline={() => handleDecline(order.id)}
+                  onMarkPaid={() => handleMarkPaid(order.id)}
                 />
               ))
             )}
@@ -397,6 +456,9 @@ export default function FarmerDashboard() {
             onPublished={() => { setShowForm(false); loadDashboard() }}
           />
         )}
+
+        {/* Farm photos */}
+        {farmer && <FarmPhotosSection farmerId={farmer.id} />}
       </div>
 
       {/* Manage listings modal */}
@@ -450,8 +512,98 @@ function ProfileEditModal({
     Array.isArray(farmer.pickup_locations) ? farmer.pickup_locations : [],
   )
   const [newPickup, setNewPickup] = useState('')
+
+  // Cover photo
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState('')
+  const [existingCoverUrl, setExistingCoverUrl] = useState(farmer.cover_photo_url ?? '')
+
+  // Avatar photo
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState('')
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState(farmer.photo_url ?? '')
+
+  // Pesticide cert
+  const [certFile, setCertFile] = useState<File | null>(null)
+  const [certPreview, setCertPreview] = useState('')
+  const [existingCertUrl, setExistingCertUrl] = useState(farmer.pesticide_cert_url ?? '')
+
+  // Pickup schedule
+  const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const [slotDays, setSlotDays] = useState<string[]>(farmer.pickup_slots?.days ?? [])
+  const [slotFrom, setSlotFrom] = useState(farmer.pickup_slots?.time_from ?? '08:00')
+  const [slotTo, setSlotTo]   = useState(farmer.pickup_slots?.time_to   ?? '12:00')
+
+  // Farm GPS location
+  const [farmerLat, setFarmerLat] = useState<number | null>(farmer.lat ?? null)
+  const [farmerLng, setFarmerLng] = useState<number | null>(farmer.lng ?? null)
+  const [farmerLocationName, setFarmerLocationName] = useState(farmer.location_name ?? '')
+  const [locating, setLocating] = useState(false)
+  const [locError, setLocError] = useState('')
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const handleFarmerGPS = () => {
+    if (!navigator.geolocation) {
+      setLocError('Geolocation not supported on this device.')
+      return
+    }
+    setLocating(true)
+    setLocError('')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        setFarmerLat(latitude)
+        setFarmerLng(longitude)
+        // Use village name as display name since we have it
+        setFarmerLocationName(farmer.village || 'Farm')
+        setLocating(false)
+      },
+      (err) => {
+        setLocError(
+          err.code === 1
+            ? 'Location permission denied / లొకేషన్ అనుమతి లేదు. Please allow location in browser settings.'
+            : 'Could not get location. Please try again. / మళ్ళీ ప్రయత్నించండి.'
+        )
+        setLocating(false)
+      },
+      { timeout: 15000, enableHighAccuracy: true },
+    )
+  }
+
+  const handlePickFile = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setFile: (f: File | null) => void,
+    setPreview: (s: string) => void,
+    currentPreview: string,
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError(tx.pickImageFile); return }
+    if (file.size > 8 * 1024 * 1024) { setError(tx.imageTooLarge); return }
+    setError('')
+    if (currentPreview) URL.revokeObjectURL(currentPreview)
+    setFile(file)
+    setPreview(URL.createObjectURL(file))
+  }
+
+  const uploadProfileImage = async (file: File, pathSuffix: string): Promise<{ url: string | null; err: string | null }> => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${farmer.id}/${pathSuffix}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('farm-images')
+      .upload(path, file, { contentType: file.type, upsert: true })
+    if (upErr) return { url: null, err: `Upload failed: ${upErr.message}` }
+    const { data } = supabase.storage.from('farm-images').getPublicUrl(path)
+    return { url: data.publicUrl, err: null }
+  }
+
+  const toggleDay = (day: string) => {
+    setSlotDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    )
+  }
 
   const addPickup = () => {
     const v = newPickup.trim()
@@ -469,8 +621,7 @@ function ProfileEditModal({
     setLoading(true)
     setError('')
 
-    // Build a unique slug from the name once the farmer actually has one.
-    // Only regenerate slug if current slug still looks auto-generated (f-<digits>-xxxx).
+    // Build unique slug from name if current slug is still auto-generated
     const isAutoSlug = /^f-\d{10}-[a-z0-9]{4}$/.test(farmer.slug ?? '')
     const baseSlug = name
       .toLowerCase()
@@ -478,20 +629,37 @@ function ProfileEditModal({
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
       .slice(0, 40) || 'farmer'
-
     let newSlug = farmer.slug
     if (isAutoSlug && baseSlug) {
       const rand = Math.random().toString(36).slice(2, 5)
       newSlug = `${baseSlug}-${rand}`
     }
 
+    // Upload photos in parallel
+    const [coverRes, avatarRes, certRes] = await Promise.all([
+      coverFile ? uploadProfileImage(coverFile, 'cover') : Promise.resolve({ url: null, err: null }),
+      avatarFile ? uploadProfileImage(avatarFile, 'avatar') : Promise.resolve({ url: null, err: null }),
+      certFile  ? uploadProfileImage(certFile,  'pesticide-cert') : Promise.resolve({ url: null, err: null }),
+    ])
+    const uploadErr = coverRes.err ?? avatarRes.err ?? certRes.err
+    if (uploadErr) { setError(uploadErr); setLoading(false); return }
+
     const payload: Record<string, unknown> = {
-      name: name.trim(),
-      village: village.trim(),
-      district: district.trim(),
+      name:             name.trim(),
+      village:          village.trim(),
+      district:         district.trim(),
       method,
-      slug: newSlug,
+      slug:             newSlug,
       pickup_locations: pickupLocations,
+      cover_photo_url:  (coverRes.url ?? existingCoverUrl) || null,
+      photo_url:        (avatarRes.url ?? existingAvatarUrl) || null,
+      pesticide_cert_url: (certRes.url ?? existingCertUrl) || null,
+      pickup_slots: slotDays.length > 0
+        ? { days: slotDays, time_from: slotFrom, time_to: slotTo }
+        : null,
+      lat: farmerLat,
+      lng: farmerLng,
+      location_name: farmerLat ? (farmerLocationName || name.trim()) : null,
     }
     if (sinceYear) payload.farming_since_year = Number(sinceYear)
 
@@ -618,6 +786,180 @@ function ProfileEditModal({
             )}
           </div>
 
+          {/* Pickup schedule */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+              {tx.pickupScheduleLabel}
+            </label>
+            <p className="text-[11px] text-gray-500 mb-2 leading-snug">{tx.pickupScheduleHelp}</p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {ALL_DAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                    slotDays.includes(day)
+                      ? 'bg-green-700 text-white border-green-700'
+                      : 'bg-white text-gray-600 border-gray-200'
+                  }`}
+                >
+                  {day.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+            {slotDays.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[11px] text-gray-500 mb-1">{tx.pickupFrom}</p>
+                  <input
+                    type="time"
+                    value={slotFrom}
+                    onChange={(e) => setSlotFrom(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 mb-1">{tx.pickupTo}</p>
+                  <input
+                    type="time"
+                    value={slotTo}
+                    onChange={(e) => setSlotTo(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+            {slotDays.length > 0 && (
+              <p className="text-xs text-green-700 font-semibold mt-2">
+                {tx.pickupSchedulePreview
+                  .replace('{days}', slotDays.map((d) => d.slice(0, 3)).join(', '))
+                  .replace('{from}', slotFrom)
+                  .replace('{to}', slotTo)}
+              </p>
+            )}
+          </div>
+
+          {/* Farm GPS location */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+              Farm location / పొలం లొకేషన్
+            </label>
+            <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+              Set your farm location so nearby buyers discover your produce first.<br />
+              దగ్గరలో ఉన్న కొనుగోలుదారులు మీ పంటను ముందుగా కనుగొంటారు.
+            </p>
+            {farmerLat && farmerLng ? (
+              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                <span className="text-sm font-semibold text-green-800">
+                  ✓ 📍 {farmerLocationName || 'Location set'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setFarmerLat(null); setFarmerLng(null); setFarmerLocationName('') }}
+                  className="text-xs text-green-700 underline font-semibold"
+                >
+                  Change / మార్చు
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleFarmerGPS}
+                  disabled={locating}
+                  className="w-full flex items-center justify-center gap-2 bg-green-700 text-white font-bold py-3.5 rounded-xl text-sm active:bg-green-800 disabled:opacity-50"
+                >
+                  {locating ? (
+                    <>
+                      <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      Getting location... / లొకేషన్ తెస్తోంది
+                    </>
+                  ) : (
+                    <>📍 Use GPS (most accurate) / GPS వాడండి</>
+                  )}
+                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 border-t border-gray-200" />
+                  <span className="text-[10px] text-gray-400 font-semibold">OR / లేదా</span>
+                  <div className="flex-1 border-t border-gray-200" />
+                </div>
+                <LocationSearch
+                  placeholder="Search farm location / పొలం లొకేషన్ వెతకండి"
+                  onSelect={(lat, lng, name) => {
+                    setFarmerLat(lat)
+                    setFarmerLng(lng)
+                    setFarmerLocationName(name)
+                  }}
+                />
+              </div>
+            )}
+            {locError && (
+              <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 mt-2">{locError}</p>
+            )}
+          </div>
+
+          {/* Farm cover photo */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+              {tx.coverPhotoLabel}
+            </label>
+            <p className="text-[11px] text-gray-500 mb-2">{tx.coverPhotoHelp}</p>
+            <ProfilePhotoUpload
+              preview={coverPreview}
+              existingUrl={existingCoverUrl}
+              onPick={(e) => handlePickFile(e, setCoverFile, setCoverPreview, coverPreview)}
+              onClear={() => { if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverFile(null); setCoverPreview(''); setExistingCoverUrl('') }}
+              takeLabel={tx.takePhoto}
+              galleryLabel={tx.fromGallery}
+              aspectClass="aspect-[3/1]"
+            />
+          </div>
+
+          {/* Farmer avatar */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+              {tx.avatarLabel}
+            </label>
+            <p className="text-[11px] text-gray-500 mb-2">{tx.avatarHelp}</p>
+            <ProfilePhotoUpload
+              preview={avatarPreview}
+              existingUrl={existingAvatarUrl}
+              onPick={(e) => handlePickFile(e, setAvatarFile, setAvatarPreview, avatarPreview)}
+              onClear={() => { if (avatarPreview) URL.revokeObjectURL(avatarPreview); setAvatarFile(null); setAvatarPreview(''); setExistingAvatarUrl('') }}
+              takeLabel={tx.takePhoto}
+              galleryLabel={tx.fromGallery}
+              aspectClass="aspect-square max-w-[120px]"
+            />
+          </div>
+
+          {/* Pesticide cert */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1.5">
+              {tx.pesticideCertLabel}
+            </label>
+            <p className="text-[11px] text-gray-500 mb-2">{tx.pesticideCertHelp}</p>
+            {existingCertUrl && !certPreview ? (
+              <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
+                <span className="text-green-700 font-semibold text-sm">{tx.certUploaded}</span>
+                <a href={existingCertUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-green-700 underline font-semibold ml-auto">{tx.viewCertificate}</a>
+                <button type="button" onClick={() => setExistingCertUrl('')}
+                  className="text-xs text-red-500 underline">{tx.removeCert}</button>
+              </div>
+            ) : (
+              <ProfilePhotoUpload
+                preview={certPreview}
+                existingUrl=""
+                onPick={(e) => handlePickFile(e, setCertFile, setCertPreview, certPreview)}
+                onClear={() => { if (certPreview) URL.revokeObjectURL(certPreview); setCertFile(null); setCertPreview('') }}
+                takeLabel={tx.takePhoto}
+                galleryLabel={tx.uploadCert}
+                aspectClass="aspect-[4/3]"
+              />
+            )}
+          </div>
+
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
           )}
@@ -631,6 +973,54 @@ function ProfileEditModal({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ─── Reusable photo upload widget for profile modal ────────── */
+function ProfilePhotoUpload({
+  preview,
+  existingUrl,
+  onPick,
+  onClear,
+  takeLabel,
+  galleryLabel,
+  aspectClass,
+}: {
+  preview: string
+  existingUrl: string
+  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onClear: () => void
+  takeLabel: string
+  galleryLabel: string
+  aspectClass: string
+}) {
+  const shown = preview || existingUrl
+  if (shown) {
+    return (
+      <div className={`relative ${aspectClass} rounded-xl overflow-hidden border border-gray-200 bg-gray-50`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={shown} alt="" className="w-full h-full object-cover" />
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute top-2 right-2 bg-white/90 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center text-base font-bold shadow"
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <label className="flex items-center justify-center gap-2 border-2 border-dashed border-green-300 rounded-xl py-4 px-2 text-green-700 text-xs font-bold cursor-pointer active:bg-green-50">
+        <span>📷</span> {takeLabel}
+        <input type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" />
+      </label>
+      <label className="flex items-center justify-center gap-2 border-2 border-dashed border-green-300 rounded-xl py-4 px-2 text-green-700 text-xs font-bold cursor-pointer active:bg-green-50">
+        <span>🖼</span> {galleryLabel}
+        <input type="file" accept="image/*" onChange={onPick} className="hidden" />
+      </label>
     </div>
   )
 }
@@ -697,6 +1087,7 @@ function ProduceListingForm({
   const [brix, setBrix] = useState(editData?.brix != null ? String(editData.brix) : '')
   const [soc, setSoc] = useState(editData?.soil_organic_carbon != null ? String(editData.soil_organic_carbon) : '')
   const [unit, setUnit] = useState(editData?.unit ?? 'kg')
+  const [harvestDate, setHarvestDate] = useState(editData?.harvest_date ?? '')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
   const [existingImageUrl, setExistingImageUrl] = useState(editData?.image_url ?? '')
@@ -786,6 +1177,7 @@ function ProduceListingForm({
         price_tier_3_price: price3 ? Number(price3) : null,
         price_tier_3_qty: price3 ? Number(Number(price2Qty) + 1) : null,
         image_url: imageUrl,
+        harvest_date: harvestDate || null,
       }
 
       let res: Response
@@ -825,6 +1217,7 @@ function ProduceListingForm({
     if (price2) { payload.price_tier_2_price = Number(price2); payload.price_tier_2_qty = Number(price2Qty) }
     if (price3) { payload.price_tier_3_price = Number(price3); payload.price_tier_3_qty = Number(price2Qty) + 1 }
     payload.image_url = imageUrl
+    payload.harvest_date = harvestDate || null
 
     const insertPayload = { ...payload, farmer_id: farmerId, status: 'available' }
     const { error: err } = await supabase.from('produce_listings').insert(insertPayload)
@@ -928,7 +1321,7 @@ function ProduceListingForm({
           />
         </div>
 
-        {/* Qty + period */}
+        {/* Qty + harvest date */}
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
             {tx.availability}
@@ -947,6 +1340,16 @@ function ProduceListingForm({
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500 mb-1">{tx.harvestDateLabel}</p>
+            <input
+              type="date"
+              value={harvestDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setHarvestDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none"
             />
           </div>
         </div>
@@ -1269,7 +1672,7 @@ function ManageListingsModal({
     setLoading(true)
     const { data, error: err } = await supabase
       .from('produce_listings')
-      .select('id, name, variety, emoji, status, method, stock_qty, price_tier_1_price, price_tier_1_qty, price_tier_2_price, price_tier_2_qty, price_tier_3_price, description, image_url, brix, soil_organic_carbon, unit, created_at')
+      .select('id, name, variety, emoji, status, method, stock_qty, price_tier_1_price, price_tier_1_qty, price_tier_2_price, price_tier_2_qty, price_tier_3_price, description, image_url, brix, soil_organic_carbon, unit, harvest_date, created_at')
       .eq('farmer_id', farmerId)
       .order('created_at', { ascending: false })
     setLoading(false)
@@ -1433,7 +1836,7 @@ function ListingRowCard({
               {statusLabel}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
+          <div className="flex items-center gap-3 mt-2 text-xs text-gray-600 flex-wrap">
             {row.price_tier_1_price != null && (
               <span className="font-bold text-green-700 text-sm">
                 ₹{row.price_tier_1_price}
@@ -1447,6 +1850,9 @@ function ListingRowCard({
               <span className="bg-green-50 text-green-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
                 {row.method}
               </span>
+            )}
+            {row.harvest_date && (
+              <FreshnessBadge harvestDate={row.harvest_date} />
             )}
           </div>
         </div>
@@ -1475,13 +1881,17 @@ function ListingRowCard({
 function OrderCard({
   order,
   processing,
+  processingPaid,
   onApprove,
   onDecline,
+  onMarkPaid,
 }: {
   order: Order
   processing: boolean
+  processingPaid: boolean
   onApprove: () => void
   onDecline: () => void
+  onMarkPaid: () => void
 }) {
   const { tx } = useLang()
 
@@ -1494,6 +1904,9 @@ function OrderCard({
     if (hrs < 24) return `${hrs}h ago`
     return `${Math.floor(hrs / 24)}d ago`
   }
+
+  const isCod = !order.payment_method || order.payment_method === 'cod'
+  const isPaid = order.payment_status === 'completed'
 
   return (
     <div className="border border-gray-200 rounded-2xl overflow-hidden">
@@ -1509,9 +1922,18 @@ function OrderCard({
               </a>
             )}
           </div>
-          <span className="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
-            {timeAgo(order.created_at)}
-          </span>
+          <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+            {isCod && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                isPaid ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {isPaid ? `✓ ${tx.paymentReceived}` : tx.codBadge}
+              </span>
+            )}
+            <span className="text-[11px] text-gray-400 whitespace-nowrap">
+              {timeAgo(order.created_at)}
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 text-sm">
@@ -1531,22 +1953,204 @@ function OrderCard({
         )}
       </div>
 
-      <div className="px-3 pb-3 grid grid-cols-2 gap-2">
-        <button
-          onClick={onApprove}
-          disabled={processing}
-          className="bg-green-600 text-white font-bold py-3 rounded-xl text-sm active:bg-green-700 disabled:opacity-50"
-        >
-          {processing ? tx.approving : `✓ ${tx.approve}`}
-        </button>
-        <button
-          onClick={onDecline}
-          disabled={processing}
-          className="border-2 border-red-300 text-red-600 font-bold py-3 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
-        >
-          {processing ? tx.declining : `✕ ${tx.decline}`}
-        </button>
+      <div className="px-3 pb-3 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onApprove}
+            disabled={processing}
+            className="bg-green-600 text-white font-bold py-3 rounded-xl text-sm active:bg-green-700 disabled:opacity-50"
+          >
+            {processing ? tx.approving : `✓ ${tx.approve}`}
+          </button>
+          <button
+            onClick={onDecline}
+            disabled={processing}
+            className="border-2 border-red-300 text-red-600 font-bold py-3 rounded-xl text-sm active:bg-red-50 disabled:opacity-50"
+          >
+            {processing ? tx.declining : `✕ ${tx.decline}`}
+          </button>
+        </div>
+        {isCod && !isPaid && (
+          <button
+            onClick={onMarkPaid}
+            disabled={processingPaid}
+            className="w-full bg-amber-500 text-white font-bold py-3 rounded-xl text-sm active:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            💵 {processingPaid ? tx.markingPaid : tx.markPaid}
+          </button>
+        )}
       </div>
+    </div>
+  )
+}
+
+export { FreshnessBadge } from '@/components/FreshnessBadge'
+
+/* ─── Earnings summary card ──────────────────────────────────── */
+function EarningsCard({
+  revenue,
+  orderCount,
+  weekly,
+}: {
+  revenue: number
+  orderCount: number
+  weekly: number[]
+}) {
+  const { tx } = useLang()
+  const maxWeek = Math.max(...weekly, 1)
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-4">
+      <h2 className="font-extrabold text-gray-900 text-base leading-tight">
+        {tx.earningsTitle}
+      </h2>
+
+      {revenue === 0 ? (
+        <p className="text-gray-400 text-sm mt-3">{tx.earningsNoData}</p>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-3xl font-black text-green-800">
+              {tx.earningsRevenue.replace('{amount}', String(revenue))}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {tx.earningsOrders.replace('{n}', String(orderCount))}
+          </p>
+
+          {/* 4-week bar chart */}
+          <div className="flex items-end gap-2 mt-4 h-14">
+            {weekly.map((amt, i) => {
+              const pct = Math.round((amt / maxWeek) * 100)
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full bg-gray-100 rounded-t-md relative" style={{ height: '40px' }}>
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-green-600 rounded-t-md transition-all"
+                      style={{ height: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    {tx.weekLabel.replace('{n}', String(i + 1))}
+                  </span>
+                  {amt > 0 && (
+                    <span className="text-[9px] font-bold text-green-700">₹{amt}</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ─── Farm photos section ───────────────────────────────────── */
+type MediaRow = { id: string; url: string; caption?: string }
+
+function FarmPhotosSection({ farmerId }: { farmerId: string }) {
+  const [photos, setPhotos] = useState<MediaRow[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    supabase
+      .from('media')
+      .select('id, url, caption')
+      .eq('farmer_id', farmerId)
+      .eq('type', 'photo')
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => setPhotos((data ?? []) as MediaRow[]))
+  }, [farmerId])
+
+  const handlePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError('Please pick an image file.'); return }
+    if (file.size > 8 * 1024 * 1024) { setError('Image must be under 8 MB.'); return }
+    setError('')
+    setUploading(true)
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${farmerId}/gallery/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('farm-images')
+      .upload(path, file, { contentType: file.type, upsert: false })
+
+    if (upErr) { setError(`Upload failed: ${upErr.message}`); setUploading(false); return }
+
+    const { data: urlData } = supabase.storage.from('farm-images').getPublicUrl(path)
+    const { data: inserted } = await supabase
+      .from('media')
+      .insert({ farmer_id: farmerId, type: 'photo', url: urlData.publicUrl, sort_order: photos.length })
+      .select('id, url, caption')
+      .single()
+
+    if (inserted) setPhotos((prev) => [...prev, inserted as MediaRow])
+    setUploading(false)
+  }
+
+  const handleDelete = async (photo: MediaRow) => {
+    if (!confirm('Remove this photo?')) return
+    setDeletingId(photo.id)
+    await supabase.from('media').delete().eq('id', photo.id)
+    setPhotos((prev) => prev.filter((p) => p.id !== photo.id))
+    setDeletingId(null)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="font-extrabold text-gray-900 text-base leading-tight">Farm Photos</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Visible on your public profile</p>
+        </div>
+        <label className={`flex items-center gap-1.5 bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-xl cursor-pointer active:bg-green-800 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+          {uploading ? (
+            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <span>+</span>
+          )}
+          {uploading ? 'Uploading…' : 'Add Photo'}
+          <input type="file" accept="image/*" onChange={handlePick} className="hidden" />
+        </label>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 mb-3">{error}</p>
+      )}
+
+      {photos.length === 0 && !uploading ? (
+        <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+          <p className="text-3xl mb-2">📷</p>
+          <p className="text-sm font-semibold text-gray-500">No farm photos yet</p>
+          <p className="text-xs text-gray-400 mt-1">Add photos of your farm, fields, and produce</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          {photos.map((photo) => (
+            <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              <button
+                onClick={() => handleDelete(photo)}
+                disabled={deletingId === photo.id}
+                className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full text-xs font-bold flex items-center justify-center"
+              >
+                {deletingId === photo.id ? '…' : '×'}
+              </button>
+            </div>
+          ))}
+          {uploading && (
+            <div className="aspect-square rounded-xl border-2 border-dashed border-green-300 bg-green-50 flex items-center justify-center">
+              <span className="w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

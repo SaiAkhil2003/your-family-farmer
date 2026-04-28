@@ -8,6 +8,7 @@ import ProduceTab from './tabs/ProduceTab'
 import QualityTab from './tabs/QualityTab'
 import ReviewsTab from './tabs/ReviewsTab'
 import FarmMediaTab from './tabs/FarmMediaTab'
+import { CartFab } from '@/components/consumer/Cart'
 
 type Props = {
   farmer: Record<string, unknown>
@@ -51,6 +52,7 @@ export default function TabSection({ farmer, produce, reviews, media }: Props) {
         {activeTab === 3 && <ReviewsTab reviews={reviews} farmerId={farmer.id as string} />}
         {activeTab === 4 && <FarmMediaTab media={media} />}
       </div>
+      <CartFab />
     </div>
   )
 }

@@ -190,19 +190,6 @@ export default function FarmersTab({
         })
       )}
 
-      <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center">
-        <p className="text-sm font-semibold text-gray-600">{tx.knowAFarmer}</p>
-        <p className="text-xs text-gray-400 mt-1">{tx.helpThemReach}</p>
-        <button
-          onClick={() => {
-            const tabs = document.querySelectorAll('button[class*="border-b-2"]')
-            if (tabs[2]) (tabs[2] as HTMLButtonElement).click()
-          }}
-          className="mt-3 bg-green-50 text-green-700 border border-green-600 text-sm font-semibold px-4 py-2 rounded-lg"
-        >
-          {tx.addFarmerCta}
-        </button>
-      </div>
     </div>
   )
 }

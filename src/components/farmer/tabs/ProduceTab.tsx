@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useLang } from '@/lib/LanguageContext'
+import { FreshnessBadge } from '@/components/FreshnessBadge'
+import { useCart } from '@/components/consumer/Cart'
 
 type Produce = {
   id: string
@@ -24,14 +26,19 @@ type Produce = {
   available_to?: string
   description?: string
   image_url?: string
+  harvest_date?: string | null
 }
+
+type PickupSlots = { days: string[]; time_from: string; time_to: string }
 
 type Farmer = {
   id?: string
   name?: string
   phone?: string
   village?: string
+  slug?: string
   pickup_locations?: string[] | null
+  pickup_slots?: PickupSlots | null
 }
 
 const EMOJI_OPTIONS = ['🍅', '🍌', '🥭', '🫑', '🥬', '🍆', '🥕', '🌽', '🧅', '🧄', '🥦', '🌿', '🍓', '🫒', '🌾']
@@ -48,21 +55,10 @@ export default function ProduceTab({
 }) {
   const { tx } = useLang()
   const f = farmer as Farmer
+  const { addItem } = useCart()
   const [listings, setListings] = useState<Produce[]>(produce as Produce[])
   const available = listings.filter((p) => p.status === 'available')
   const comingSoon = listings.filter((p) => p.status === 'coming_soon')
-  const pickupLocations = Array.isArray(f.pickup_locations) ? f.pickup_locations : []
-  const [selectedPickup, setSelectedPickup] = useState<string>('')
-
-  const buildWhatsAppLink = (item: Produce) => {
-    let message = tx.orderMessage
-      .replace('{name}', f.name ?? '')
-      .replace('{produce}', `${item.name}${item.variety ? ` (${item.variety})` : ''}`)
-    if (selectedPickup) {
-      message += `\n\nPickup location / పికప్ స్థలం: ${selectedPickup}`
-    }
-    return `https://wa.me/${f.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`
-  }
 
   const handleProduceAdded = (newItem: Produce) => {
     setListings((prev) => [newItem, ...prev])
@@ -78,26 +74,18 @@ export default function ProduceTab({
     setListings((prev) => prev.filter((p) => p.id !== id))
   }
 
+  const farmerCartInfo = {
+    farmerId: f.id ?? '',
+    farmerName: f.name ?? '',
+    farmerPhone: f.phone ?? '',
+    farmerVillage: f.village ?? '',
+    farmerSlug: f.slug ?? '',
+    farmerPickupLocations: Array.isArray(f.pickup_locations) ? f.pickup_locations : [],
+    farmerPickupSlots: f.pickup_slots ?? null,
+  }
+
   return (
     <div className="space-y-6">
-      {pickupLocations.length > 0 && available.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3">
-          <label className="text-xs font-bold text-green-900 uppercase tracking-wide block mb-1.5">
-            Pickup location / పికప్ స్థలం
-          </label>
-          <select
-            value={selectedPickup}
-            onChange={(e) => setSelectedPickup(e.target.value)}
-            className="w-full border border-green-200 bg-white rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none"
-          >
-            <option value="">Select a pickup point / స్థలం ఎంచుకోండి</option>
-            {pickupLocations.map((loc) => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {available.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -110,7 +98,22 @@ export default function ProduceTab({
               <ProduceCard
                 key={item.id}
                 item={item}
-                whatsappLink={buildWhatsAppLink(item)}
+                farmerInfo={farmerCartInfo}
+                onAddToCart={(qty) => addItem({
+                  listingId: item.id,
+                  name: item.name,
+                  variety: item.variety,
+                  emoji: item.emoji,
+                  pricePerKg: item.price_tier_1_price,
+                  priceTier1Qty: item.price_tier_1_qty,
+                  priceTier1Price: item.price_tier_1_price,
+                  priceTier2Qty: item.price_tier_2_qty,
+                  priceTier2Price: item.price_tier_2_price,
+                  priceTier3Price: item.price_tier_3_price,
+                  unit: undefined,
+                  stockQty: item.stock_qty,
+                  ...farmerCartInfo,
+                }, qty)}
                 onDelete={isEditMode ? () => handleDelete(item.id) : undefined}
               />
             ))}
@@ -301,8 +304,30 @@ function AddProduceForm({ farmerId, onAdded }: { farmerId: string; onAdded: (ite
   )
 }
 
-function ProduceCard({ item, whatsappLink, onDelete }: { item: Produce; whatsappLink: string; onDelete?: () => void }) {
+type FarmerCartInfo = {
+  farmerId: string
+  farmerName: string
+  farmerPhone: string
+  farmerVillage: string
+  farmerSlug: string
+  farmerPickupLocations: string[]
+  farmerPickupSlots: PickupSlots | null
+}
+
+function ProduceCard({
+  item,
+  farmerInfo,
+  onAddToCart,
+  onDelete,
+}: {
+  item: Produce
+  farmerInfo: FarmerCartInfo
+  onAddToCart: (qty: number) => void
+  onDelete?: () => void
+}) {
   const { tx } = useLang()
+  const [added, setAdded] = useState(false)
+
   const bgColors: Record<string, string> = {
     '🍅': 'bg-red-100', '🥬': 'bg-green-100', '🥭': 'bg-orange-100',
     '🍆': 'bg-purple-100', '🥕': 'bg-orange-100', '🌽': 'bg-yellow-100',
@@ -310,6 +335,12 @@ function ProduceCard({ item, whatsappLink, onDelete }: { item: Produce; whatsapp
   }
   const emoji = item.emoji ?? '🌿'
   const bg = bgColors[emoji] ?? 'bg-green-100'
+
+  const handleAdd = () => {
+    onAddToCart(1)
+    setAdded(true)
+    setTimeout(() => setAdded(false), 1500)
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
@@ -346,6 +377,7 @@ function ProduceCard({ item, whatsappLink, onDelete }: { item: Produce; whatsapp
             {item.brix && (
               <span className="bg-amber-100 text-amber-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">BRIX {item.brix}</span>
             )}
+            {item.harvest_date && <FreshnessBadge harvestDate={item.harvest_date} />}
           </div>
           {item.description && (
             <p className="text-xs text-gray-600 mt-2 leading-snug whitespace-pre-line">
@@ -372,17 +404,23 @@ function ProduceCard({ item, whatsappLink, onDelete }: { item: Produce; whatsapp
       )}
 
       <div className="px-3 pb-3 pt-2 space-y-2">
-        <a
-          href={whatsappLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full text-center bg-green-700 text-white font-bold py-3.5 rounded-xl text-base"
+        <button
+          onClick={handleAdd}
+          className={`flex items-center justify-center gap-2 w-full font-bold py-3.5 rounded-xl text-base transition-colors ${
+            added
+              ? 'bg-green-100 text-green-800'
+              : 'bg-green-700 text-white active:bg-green-800'
+          }`}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-          </svg>
-          {tx.orderWhatsApp}
-        </a>
+          {added ? (
+            <>✓ Added to cart / బుట్టకు చేర్చబడింది</>
+          ) : (
+            <>
+              <span className="text-xl leading-none">+</span>
+              Add to cart / బుట్టకు చేర్చండి
+            </>
+          )}
+        </button>
         {onDelete && (
           <button
             onClick={onDelete}

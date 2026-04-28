@@ -1,10 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import GlobalNav from '@/components/consumer/GlobalNav'
 import { CartFab, useCart } from '@/components/consumer/Cart'
 import { supabase } from '@/lib/supabase'
+import { FreshnessBadge } from '@/components/FreshnessBadge'
+import { haversineKm, nearestTown, formatDistance } from '@/lib/location'
+import LocationSearch from '@/components/LocationSearch'
+
+type PickupSlots = {
+  days: string[]
+  time_from: string
+  time_to: string
+}
 
 type Farmer = {
   id: string
@@ -14,6 +23,9 @@ type Farmer = {
   phone: string
   method: string
   pickup_locations?: string[] | null
+  pickup_slots?: PickupSlots | null
+  lat?: number | null
+  lng?: number | null
 }
 
 type ProduceListing = {
@@ -33,6 +45,7 @@ type ProduceListing = {
   stock_qty?: number
   unit?: string
   available_to?: string
+  harvest_date?: string | null
   farmer_id: string
   farmer?: Farmer
 }
@@ -77,6 +90,14 @@ export default function ConsumerPage() {
   const [category, setCategory]       = useState('all')
   const [loading, setLoading]         = useState(true)
   const [farmerCount, setFarmerCount] = useState(0)
+  const searchAbortRef = useRef<AbortController | null>(null)
+
+  // Consumer location
+  const [consumerLat, setConsumerLat]           = useState<number | null>(null)
+  const [consumerLng, setConsumerLng]           = useState<number | null>(null)
+  const [consumerLocationName, setConsumerLocationName] = useState('')
+  const [showLocationSheet, setShowLocationSheet]       = useState(false)
+  const [distanceFilter, setDistanceFilter]             = useState<number | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -116,21 +137,72 @@ export default function ConsumerPage() {
       setFiltered(available)
       return
     }
+    searchAbortRef.current?.abort()
+    searchAbortRef.current = new AbortController()
     try {
       const p = new URLSearchParams()
       if (search)              p.set('q', search)
       if (method !== 'all')    p.set('method', method)
       if (category !== 'all')  p.set('category', category)
-      const res = await fetch(`/api/produce/search?${p}`, { cache: 'no-store' })
+      const res = await fetch(`/api/produce/search?${p}`, { cache: 'no-store', signal: searchAbortRef.current.signal })
       const data = await res.json().catch(() => [])
       setFiltered(Array.isArray(data) ? data : [])
-    } catch { /* silent */ }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') { /* silent */ }
+    }
   }, [search, method, category, available])
 
   useEffect(() => {
     const t = setTimeout(doSearch, 300)
     return () => clearTimeout(t)
   }, [doSearch])
+
+  // Load consumer location from localStorage
+  useEffect(() => {
+    const lat  = localStorage.getItem('yff_consumer_lat')
+    const lng  = localStorage.getItem('yff_consumer_lng')
+    const name = localStorage.getItem('yff_consumer_location_name')
+    if (lat && lng) {
+      setConsumerLat(Number(lat))
+      setConsumerLng(Number(lng))
+      setConsumerLocationName(name ?? '')
+    } else if (!localStorage.getItem('yff_location_prompted')) {
+      setShowLocationSheet(true)
+    }
+  }, [])
+
+  const saveConsumerLocation = useCallback((lat: number, lng: number, name: string) => {
+    setConsumerLat(lat)
+    setConsumerLng(lng)
+    setConsumerLocationName(name)
+    localStorage.setItem('yff_consumer_lat', String(lat))
+    localStorage.setItem('yff_consumer_lng', String(lng))
+    localStorage.setItem('yff_consumer_location_name', name)
+    localStorage.setItem('yff_location_prompted', '1')
+    setShowLocationSheet(false)
+  }, [])
+
+  // Sort + distance-filter produce
+  const displayItems = useMemo(() => {
+    type WithDist = ProduceListing & { distKm: number | null }
+    const withDist: WithDist[] = filtered.map((item) => ({
+      ...item,
+      distKm: (consumerLat && consumerLng && item.farmer?.lat && item.farmer?.lng)
+        ? haversineKm(consumerLat, consumerLng, item.farmer.lat, item.farmer.lng)
+        : null,
+    }))
+    if (!consumerLat || !consumerLng) return withDist
+    let result = withDist
+    if (distanceFilter) {
+      result = result.filter((i) => i.distKm !== null && i.distKm <= distanceFilter)
+    }
+    return result.sort((a, b) => {
+      if (a.distKm === null && b.distKm === null) return 0
+      if (a.distKm === null) return 1
+      if (b.distKm === null) return -1
+      return a.distKm - b.distKm
+    })
+  }, [filtered, consumerLat, consumerLng, distanceFilter])
 
   return (
     <main className="min-h-screen bg-gray-50 pb-12">
@@ -163,6 +235,23 @@ export default function ConsumerPage() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Location pill */}
+          <div className="flex flex-wrap items-center gap-2 mt-5">
+            <button
+              onClick={() => setShowLocationSheet(true)}
+              className="inline-flex items-center gap-1.5 bg-green-800 border border-green-700 text-green-200 text-sm font-semibold px-4 py-2.5 rounded-full active:bg-green-700"
+            >
+              📍 {consumerLocationName || 'Set location / లొకేషన్ పెట్టండి'}
+              <span className="text-green-400 text-xs ml-0.5">✎</span>
+            </button>
+            <Link
+              href="/consumer/orders"
+              className="inline-flex items-center gap-2 bg-green-800 border border-green-700 text-green-200 text-xs font-semibold px-4 py-2.5 rounded-full"
+            >
+              📦 My Orders / నా ఆర్డర్లు →
+            </Link>
           </div>
         </div>
       </div>
@@ -214,6 +303,27 @@ export default function ConsumerPage() {
         </div>
       </div>
 
+      {/* ── Distance filter chips (only when location set) ── */}
+      {consumerLat && consumerLng && (
+        <div className="max-w-3xl mx-auto mt-3 px-4">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            {([null, 5, 10, 25] as const).map((d) => (
+              <button
+                key={d ?? 'all'}
+                onClick={() => setDistanceFilter(d)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                  distanceFilter === d
+                    ? 'bg-green-700 text-white border-green-700'
+                    : 'bg-white text-gray-700 border-gray-200'
+                }`}
+              >
+                {d === null ? 'All / అన్నీ' : `< ${d} km`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Available now ────────────────────── */}
       <div className="max-w-3xl mx-auto px-4 mt-6">
         <div className="flex items-end justify-between mb-4">
@@ -225,19 +335,23 @@ export default function ConsumerPage() {
           </div>
           {!loading && (
             <span className="text-sm font-bold text-gray-400">
-              {filtered.length} items / వస్తువులు
+              {displayItems.length} items / వస్తువులు
             </span>
           )}
         </div>
 
         {loading ? (
           <LoadingSkeleton />
-        ) : filtered.length === 0 ? (
-          <EmptyState />
+        ) : displayItems.length === 0 ? (
+          distanceFilter ? (
+            <DistanceEmptyState km={distanceFilter} onClear={() => setDistanceFilter(null)} />
+          ) : (
+            <EmptyState />
+          )
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {filtered.map((item) => (
-              <ProduceCard key={item.id} item={item} />
+            {displayItems.map((item) => (
+              <ProduceCard key={item.id} item={item} distanceKm={'distKm' in item ? (item as ProduceListing & { distKm: number | null }).distKm : null} />
             ))}
           </div>
         )}
@@ -265,12 +379,23 @@ export default function ConsumerPage() {
 
       {/* ── Floating cart button ─────────────── */}
       <CartFab />
+
+      {/* ── Location bottom sheet ─────────────── */}
+      {showLocationSheet && (
+        <LocationBottomSheet
+          onSet={saveConsumerLocation}
+          onClose={() => {
+            localStorage.setItem('yff_location_prompted', '1')
+            setShowLocationSheet(false)
+          }}
+        />
+      )}
     </main>
   )
 }
 
 /* ─── Produce card ──────────────────────────────────────── */
-function ProduceCard({ item }: { item: ProduceListing }) {
+function ProduceCard({ item, distanceKm }: { item: ProduceListing; distanceKm?: number | null }) {
   const emoji      = item.emoji ?? '🌿'
   const emojiBg    = EMOJI_BG[emoji] ?? 'bg-green-50'
   const method     = item.method?.toLowerCase() ?? 'natural'
@@ -344,6 +469,7 @@ function ProduceCard({ item }: { item: ProduceListing }) {
       farmerVillage: farmer.village,
       farmerSlug: farmer.slug,
       farmerPickupLocations: farmer.pickup_locations ?? [],
+      farmerPickupSlots: farmer.pickup_slots ?? null,
     }, 1)
   }
 
@@ -393,6 +519,13 @@ function ProduceCard({ item }: { item: ProduceListing }) {
           </Link>
         )}
 
+        {/* Distance badge */}
+        {distanceKm != null && (
+          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full self-start">
+            📍 {formatDistance(distanceKm)} away
+          </span>
+        )}
+
         {/* Price + method badge */}
         <div className="flex items-center justify-between mt-1">
           <span className="text-green-700 font-black text-lg">
@@ -403,6 +536,9 @@ function ProduceCard({ item }: { item: ProduceListing }) {
             {badgeLabel}
           </span>
         </div>
+
+        {/* Freshness badge */}
+        {item.harvest_date && <FreshnessBadge harvestDate={item.harvest_date} />}
 
         {/* Stock display */}
         {liveStock != null && (
@@ -530,6 +666,29 @@ function LoadingSkeleton() {
   )
 }
 
+/* ─── Distance empty state ──────────────────────────────── */
+function DistanceEmptyState({ km, onClear }: { km: number; onClear: () => void }) {
+  return (
+    <div className="text-center py-14">
+      <div className="text-6xl mb-4">📍</div>
+      <p className="text-gray-800 font-bold text-lg">No farmers within {km} km</p>
+      <p className="text-gray-500 text-sm mt-1">
+        {km} కి.మీ లోపల రైతులు లేరు
+      </p>
+      <p className="text-gray-400 text-xs mt-2 leading-snug px-8">
+        Farmers nearby may not have set their location yet.<br />
+        దగ్గరలోని రైతులు ఇంకా లొకేషన్ పెట్టలేదు.
+      </p>
+      <button
+        onClick={onClear}
+        className="mt-5 bg-green-700 text-white font-bold px-6 py-3 rounded-xl text-sm"
+      >
+        Show all produce / అన్ని పంటలు చూపించు
+      </button>
+    </div>
+  )
+}
+
 /* ─── Empty state ───────────────────────────────────────── */
 function EmptyState() {
   return (
@@ -540,6 +699,110 @@ function EmptyState() {
         Try a different search or category<br />
         వేరే వెతకండి లేదా వేరే వర్గాన్ని ఎంచుకోండి
       </p>
+    </div>
+  )
+}
+
+/* ─── Location bottom sheet ─────────────────────────────────── */
+function LocationBottomSheet({
+  onSet,
+  onClose,
+}: {
+  onSet: (lat: number, lng: number, name: string) => void
+  onClose: () => void
+}) {
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [gpsError, setGpsError]   = useState('')
+
+  const handleGPS = () => {
+    if (!navigator.geolocation) {
+      setGpsError('GPS not supported on this device / GPS అందుబాటులో లేదు')
+      return
+    }
+    setGpsStatus('loading')
+    setGpsError('')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        const name = nearestTown(latitude, longitude)
+        onSet(latitude, longitude, name)
+      },
+      (err) => {
+        setGpsStatus('error')
+        setGpsError(
+          err.code === 1
+            ? 'Location access denied. Search your town below. / లొకేషన్ అనుమతి లేదు. పట్టణం వెతకండి.'
+            : 'Could not get GPS. Search your town below. / GPS రాలేదు. పట్టణం వెతకండి.'
+        )
+      },
+      { timeout: 12000, enableHighAccuracy: true },
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+      <div className="bg-white w-full max-w-md rounded-t-3xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-extrabold text-gray-900 text-lg leading-tight">
+              Where are you? / మీరు ఎక్కడ ఉన్నారు?
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              See produce from farmers near you / దగ్గరలోని రైతుల పంట చూడండి
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 text-3xl leading-none p-1">×</button>
+        </div>
+
+        {/* GPS button */}
+        <button
+          onClick={handleGPS}
+          disabled={gpsStatus === 'loading'}
+          className="w-full flex items-center justify-center gap-2 bg-green-700 text-white font-bold py-4 rounded-xl text-base active:bg-green-800 disabled:opacity-60"
+        >
+          {gpsStatus === 'loading' ? (
+            <>
+              <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+              Detecting... / వెతుకుతోంది
+            </>
+          ) : (
+            <>📍 Use my current location / నా లొకేషన్ వాడండి</>
+          )}
+        </button>
+
+        {gpsError && (
+          <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 leading-snug">{gpsError}</p>
+        )}
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 border-t border-gray-200" />
+          <span className="text-xs text-gray-400 font-semibold">OR / లేదా</span>
+          <div className="flex-1 border-t border-gray-200" />
+        </div>
+
+        {/* Search input */}
+        <div>
+          <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block mb-2">
+            Search your location / లొకేషన్ వెతకండి
+          </label>
+          <p className="text-[11px] text-gray-500 mb-2">
+            Type any city, town or village in AP / Telangana<br />
+            ఆంధ్రప్రదేశ్ / తెలంగాణలో ఏ పట్టణమైనా టైప్ చేయండి
+          </p>
+          <LocationSearch
+            placeholder="e.g. Visakhapatnam, Hyderabad, Eluru..."
+            onSelect={(lat, lng, name) => onSet(lat, lng, name)}
+          />
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full text-sm text-gray-500 py-2"
+        >
+          Skip for now / తర్వాత చేస్తాను
+        </button>
+      </div>
     </div>
   )
 }
@@ -572,7 +835,7 @@ function DemandIntentBanner() {
       delivery_location: location.trim() || null,
       requester_name: name.trim(),
       requester_phone: phone.trim(),
-      region_slug: 'tadepalligudem',
+      region_slug: localStorage.getItem('yff_consumer_location_name')?.toLowerCase().replace(/\s+/g, '') || 'tadepalligudem',
     })
     setLoading(false)
     if (err) { setError(err.message); return }
