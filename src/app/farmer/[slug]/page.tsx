@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
+
+export const dynamic = 'force-dynamic'
 import { Suspense } from 'react'
 import TopNav from '@/components/farmer/TopNav'
 import FarmCover from '@/components/farmer/FarmCover'

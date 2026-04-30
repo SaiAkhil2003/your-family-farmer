@@ -35,6 +35,7 @@ type Farmer = {
   lat: number | null
   lng: number | null
   location_name: string | null
+  upi_id: string | null
 }
 
 type DemandBar = {
@@ -534,6 +535,9 @@ function ProfileEditModal({
   const [slotFrom, setSlotFrom] = useState(farmer.pickup_slots?.time_from ?? '08:00')
   const [slotTo, setSlotTo]   = useState(farmer.pickup_slots?.time_to   ?? '12:00')
 
+  // UPI ID
+  const [upiId, setUpiId] = useState(farmer.upi_id ?? '')
+
   // Farm GPS location
   const [farmerLat, setFarmerLat] = useState<number | null>(farmer.lat ?? null)
   const [farmerLng, setFarmerLng] = useState<number | null>(farmer.lng ?? null)
@@ -590,10 +594,11 @@ function ProfileEditModal({
 
   const uploadProfileImage = async (file: File, pathSuffix: string): Promise<{ url: string | null; err: string | null }> => {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const path = `${farmer.id}/${pathSuffix}.${ext}`
+    // Include timestamp in path so each upload gets a unique URL, busting browser cache
+    const path = `${farmer.id}/${pathSuffix}-${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage
       .from('farm-images')
-      .upload(path, file, { contentType: file.type, upsert: true })
+      .upload(path, file, { contentType: file.type, upsert: false })
     if (upErr) return { url: null, err: `Upload failed: ${upErr.message}` }
     const { data } = supabase.storage.from('farm-images').getPublicUrl(path)
     return { url: data.publicUrl, err: null }
@@ -618,6 +623,10 @@ function ProfileEditModal({
   const handleSave = async () => {
     if (!name.trim()) { setError(tx.nameRequired); return }
     if (!village.trim()) { setError(tx.villageRequired); return }
+    if (upiId.trim() && !/^[a-zA-Z0-9._\-]{2,256}@[a-zA-Z]{2,64}$/.test(upiId.trim())) {
+      setError('Invalid UPI ID format. Example: yourname@ybl or 9876543210@paytm')
+      return
+    }
     setLoading(true)
     setError('')
 
@@ -654,6 +663,7 @@ function ProfileEditModal({
       cover_photo_url:  (coverRes.url ?? existingCoverUrl) || null,
       photo_url:        (avatarRes.url ?? existingAvatarUrl) || null,
       pesticide_cert_url: (certRes.url ?? existingCertUrl) || null,
+      upi_id:           upiId.trim() || null,
       pickup_slots: slotDays.length > 0
         ? { days: slotDays, time_from: slotFrom, time_to: slotTo }
         : null,
@@ -957,6 +967,29 @@ function ProfileEditModal({
                 galleryLabel={tx.uploadCert}
                 aspectClass="aspect-[4/3]"
               />
+            )}
+          </div>
+
+          {/* UPI ID */}
+          <div>
+            <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block mb-1">
+              UPI ID for payments / పేమెంట్ కోసం UPI ID
+            </label>
+            <p className="text-[11px] text-gray-500 mb-2">
+              Buyers will pay directly to this UPI ID. Example: yourname@ybl, 9876543210@paytm
+            </p>
+            <input
+              type="text"
+              inputMode="email"
+              placeholder="yourname@ybl"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value.trim())}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+            />
+            {upiId.trim() && (
+              <p className="text-[11px] text-green-700 mt-1 font-medium">
+                ✓ Buyers can pay directly to this UPI ID
+              </p>
             )}
           </div>
 
@@ -1906,7 +1939,9 @@ function OrderCard({
   }
 
   const isCod = !order.payment_method || order.payment_method === 'cod'
+  const isUpi = order.payment_method === 'upi'
   const isPaid = order.payment_status === 'completed'
+  const isPaymentClaimed = order.payment_status === 'payment_claimed'
 
   return (
     <div className="border border-gray-200 rounded-2xl overflow-hidden">
@@ -1928,6 +1963,15 @@ function OrderCard({
                 isPaid ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
               }`}>
                 {isPaid ? `✓ ${tx.paymentReceived}` : tx.codBadge}
+              </span>
+            )}
+            {isUpi && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                isPaid ? 'bg-green-100 text-green-800'
+                : isPaymentClaimed ? 'bg-orange-100 text-orange-800'
+                : 'bg-blue-100 text-blue-700'
+              }`}>
+                {isPaid ? '✓ UPI Paid' : isPaymentClaimed ? '⏳ Buyer Paid — Verify' : '📲 UPI'}
               </span>
             )}
             <span className="text-[11px] text-gray-400 whitespace-nowrap">
@@ -1952,6 +1996,17 @@ function OrderCard({
           <p className="text-xs text-gray-500">📍 {order.pickup_location}</p>
         )}
       </div>
+
+      {isUpi && isPaymentClaimed && (
+        <div className="mx-3 mb-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
+          <p className="text-xs font-bold text-orange-800">
+            📲 Buyer says they paid via UPI
+          </p>
+          <p className="text-[11px] text-orange-700 mt-0.5">
+            Open your UPI app (GPay/PhonePe) and confirm you received ₹{order.total_price ?? '?'}. Then Approve below.
+          </p>
+        </div>
+      )}
 
       <div className="px-3 pb-3 space-y-2">
         <div className="grid grid-cols-2 gap-2">

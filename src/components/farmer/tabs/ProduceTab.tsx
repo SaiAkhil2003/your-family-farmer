@@ -39,6 +39,7 @@ type Farmer = {
   slug?: string
   pickup_locations?: string[] | null
   pickup_slots?: PickupSlots | null
+  upi_id?: string | null
 }
 
 const EMOJI_OPTIONS = ['🍅', '🍌', '🥭', '🫑', '🥬', '🍆', '🥕', '🌽', '🧅', '🧄', '🥦', '🌿', '🍓', '🫒', '🌾']
@@ -82,6 +83,7 @@ export default function ProduceTab({
     farmerSlug: f.slug ?? '',
     farmerPickupLocations: Array.isArray(f.pickup_locations) ? f.pickup_locations : [],
     farmerPickupSlots: f.pickup_slots ?? null,
+    farmerUpiId: f.upi_id ?? undefined,
   }
 
   return (
@@ -312,6 +314,7 @@ type FarmerCartInfo = {
   farmerSlug: string
   farmerPickupLocations: string[]
   farmerPickupSlots: PickupSlots | null
+  farmerUpiId?: string
 }
 
 function ProduceCard({
