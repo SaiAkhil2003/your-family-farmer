@@ -198,6 +198,7 @@ function CartSheet({
   const [placingUpiOrder, setPlacingUpiOrder] = useState<string | null>(null)
   const [markingPaid, setMarkingPaid] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [paidDone, setPaidDone] = useState(false)
   // Live UPI IDs fetched from DB — always up to date, overrides stale cart data
   const [liveUpiIds, setLiveUpiIds] = useState<Record<string, string>>({})
 
@@ -331,6 +332,18 @@ function CartSheet({
     for (const it of group) {
       const price = it.pricePerKg ? Math.round(it.pricePerKg * it.qty) : null
       if (price) total += price
+    }
+
+    if (total < 5) {
+      showToast('Minimum UPI payment is ₹5. Please add more items.')
+      setPlacingUpiOrder(null)
+      return
+    }
+    total = 0
+
+    for (const it of group) {
+      const price = it.pricePerKg ? Math.round(it.pricePerKg * it.qty) : null
+      if (price) total += price
       const { data, error } = await supabase.from('orders').insert({
         farmer_id: it.farmerId,
         produce_listing_id: it.listingId,
@@ -376,8 +389,7 @@ function CartSheet({
     )
     clearFarmer(upiScreen.farmerId)
     setMarkingPaid(false)
-    setUpiScreen(null)
-    showToast('Order placed! Farmer will confirm after verifying payment.')
+    setPaidDone(true)
   }
 
   const handleCopyUpi = () => {
@@ -388,9 +400,50 @@ function CartSheet({
     })
   }
 
+  // Paid confirmation screen
+  if (upiScreen && paidDone) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+        <div className="bg-white w-full max-w-md rounded-t-3xl px-6 py-10 flex flex-col items-center text-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-3xl">✓</div>
+          <div>
+            <h2 className="font-extrabold text-gray-900 text-xl">Payment submitted!</h2>
+            <p className="text-green-700 font-semibold mt-0.5">చెల్లింపు సమర్పించబడింది!</p>
+          </div>
+          <div className="bg-gray-50 rounded-2xl px-5 py-4 w-full text-left space-y-1">
+            <p className="text-xs text-gray-500 font-medium">Paid to</p>
+            <p className="font-bold text-gray-900">{upiScreen.farmerName}</p>
+            <p className="text-xs text-gray-500">{upiScreen.farmerVillage}</p>
+            <p className="text-lg font-black text-green-900 mt-2">₹{upiScreen.amount}</p>
+          </div>
+          <p className="text-sm text-gray-600 leading-snug">
+            Waiting for farmer confirmation / రైతు నిర్ధారణ కోసం వేచి ఉంది
+          </p>
+          <p className="text-xs text-gray-400 leading-snug">
+            The farmer will verify the payment in their UPI app and confirm your order via WhatsApp.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base active:bg-green-800 mt-2"
+          >
+            Done / మూసివేయి
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // UPI payment screen shown after placing a UPI order
   if (upiScreen) {
-    const upiLink = `upi://pay?pa=${encodeURIComponent(upiScreen.upiId)}&pn=${encodeURIComponent(upiScreen.farmerName)}&am=${upiScreen.amount}&cu=INR&tn=YourFamilyFarmer%20Order`
+    const pa = encodeURIComponent(upiScreen.upiId)
+    const pn = encodeURIComponent(upiScreen.farmerName)
+    const am = upiScreen.amount
+    const tn = encodeURIComponent('YourFamilyFarmer Order')
+
+    const gpayLink = `intent://upi/pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`
+    const phonepeLink = `intent://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}#Intent;scheme=phonepe;package=com.phonepe.app;end`
+    const paytmLink = `intent://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}#Intent;scheme=paytm;package=net.one97.paytm;end`
+
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
         {toast && (
@@ -408,15 +461,44 @@ function CartSheet({
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
-            {/* Amount + farmer */}
+            {/* Farmer + amount */}
             <div className="bg-green-50 rounded-2xl p-4 text-center">
-              <p className="text-3xl font-black text-green-900">₹{upiScreen.amount}</p>
-              <p className="text-sm text-green-700 mt-1 font-semibold">
-                to {upiScreen.farmerName} · {upiScreen.farmerVillage}
-              </p>
+              <p className="text-sm font-bold text-green-700">🧑‍🌾 {upiScreen.farmerName} · {upiScreen.farmerVillage}</p>
+              <p className="text-3xl font-black text-green-900 mt-2">Pay ₹{am}</p>
+              <p className="text-sm text-green-600 mt-0.5">₹{am} చెల్లించండి</p>
             </div>
 
-            {/* UPI ID display + copy */}
+            {/* Three app buttons */}
+            <div>
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wide mb-3">
+                Choose your UPI app / యాప్ ఎంచుకోండి
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <a
+                  href={gpayLink}
+                  className="flex flex-col items-center gap-2 bg-blue-50 border-2 border-blue-200 rounded-2xl py-5 active:bg-blue-100"
+                >
+                  <span className="text-2xl font-black text-blue-700">G</span>
+                  <span className="text-xs font-extrabold text-blue-900">GPay</span>
+                </a>
+                <a
+                  href={phonepeLink}
+                  className="flex flex-col items-center gap-2 bg-purple-50 border-2 border-purple-200 rounded-2xl py-5 active:bg-purple-100"
+                >
+                  <span className="text-2xl font-black text-purple-700">Pe</span>
+                  <span className="text-xs font-extrabold text-purple-900">PhonePe</span>
+                </a>
+                <a
+                  href={paytmLink}
+                  className="flex flex-col items-center gap-2 bg-sky-50 border-2 border-sky-200 rounded-2xl py-5 active:bg-sky-100"
+                >
+                  <span className="text-2xl font-black text-sky-700">PT</span>
+                  <span className="text-xs font-extrabold text-sky-900">Paytm</span>
+                </a>
+              </div>
+            </div>
+
+            {/* UPI ID + copy */}
             <div>
               <p className="text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">
                 UPI ID / UPI గుర్తింపు
@@ -432,19 +514,10 @@ function CartSheet({
                   {copied ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
+              <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
+                Verify the payee name in your UPI app matches the farmer name above before paying.
+              </p>
             </div>
-
-            {/* Open UPI app */}
-            <a
-              href={upiLink}
-              className="block w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-base text-center active:bg-blue-700"
-            >
-              📲 Open UPI App to Pay
-            </a>
-
-            <p className="text-center text-xs text-gray-500 -mt-2">
-              Opens GPay / PhonePe / Paytm or any UPI app
-            </p>
 
             {/* Divider */}
             <div className="flex items-center gap-3">
@@ -462,8 +535,8 @@ function CartSheet({
               {markingPaid ? 'Saving...' : '✓ I have paid / చెల్లించాను'}
             </button>
 
-            <p className="text-center text-[11px] text-gray-500 leading-snug">
-              Your order is saved. The farmer will confirm once they see the payment in their UPI app.
+            <p className="text-center text-[11px] text-gray-500 leading-snug pb-2">
+              Waiting for farmer confirmation / రైతు నిర్ధారణ కోసం వేచి ఉంది
             </p>
           </div>
         </div>
