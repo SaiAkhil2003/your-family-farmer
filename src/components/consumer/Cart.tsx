@@ -440,9 +440,17 @@ function CartSheet({
     const am = upiScreen.amount
     const tn = encodeURIComponent('YourFamilyFarmer Order')
 
-    const gpayLink = `intent://upi/pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`
-    const phonepeLink = `intent://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}#Intent;scheme=phonepe;package=com.phonepe.app;end`
-    const paytmLink = `intent://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}#Intent;scheme=paytm;package=net.one97.paytm;end`
+    // Native app URL schemes — work in PWA standalone mode and all Android browsers
+    const gpayLink    = `tez://upi/pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
+    const phonepeLink = `phonepe://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
+    const paytmLink   = `paytmmp://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
+    const fallbackLink = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
+
+    const openUpi = (appLink: string) => {
+      window.location.href = appLink
+      // If app isn't installed, fall back to generic UPI picker after 1.5 s
+      setTimeout(() => { window.location.href = fallbackLink }, 1500)
+    }
 
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
@@ -474,27 +482,27 @@ function CartSheet({
                 Choose your UPI app / యాప్ ఎంచుకోండి
               </p>
               <div className="grid grid-cols-3 gap-3">
-                <a
-                  href={gpayLink}
+                <button
+                  onClick={() => openUpi(gpayLink)}
                   className="flex flex-col items-center gap-2 bg-blue-50 border-2 border-blue-200 rounded-2xl py-5 active:bg-blue-100"
                 >
                   <span className="text-2xl font-black text-blue-700">G</span>
                   <span className="text-xs font-extrabold text-blue-900">GPay</span>
-                </a>
-                <a
-                  href={phonepeLink}
+                </button>
+                <button
+                  onClick={() => openUpi(phonepeLink)}
                   className="flex flex-col items-center gap-2 bg-purple-50 border-2 border-purple-200 rounded-2xl py-5 active:bg-purple-100"
                 >
                   <span className="text-2xl font-black text-purple-700">Pe</span>
                   <span className="text-xs font-extrabold text-purple-900">PhonePe</span>
-                </a>
-                <a
-                  href={paytmLink}
+                </button>
+                <button
+                  onClick={() => openUpi(paytmLink)}
                   className="flex flex-col items-center gap-2 bg-sky-50 border-2 border-sky-200 rounded-2xl py-5 active:bg-sky-100"
                 >
                   <span className="text-2xl font-black text-sky-700">PT</span>
                   <span className="text-xs font-extrabold text-sky-900">Paytm</span>
-                </a>
+                </button>
               </div>
             </div>
 
