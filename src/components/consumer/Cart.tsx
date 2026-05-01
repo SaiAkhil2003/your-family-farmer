@@ -196,8 +196,9 @@ function CartSheet({
   const [pickupDayByFarmer, setPickupDayByFarmer] = useState<Record<string, string>>({})
   const [toast, setToast] = useState('')
   const [placingUpiOrder, setPlacingUpiOrder] = useState<string | null>(null)
-  const [markingPaid, setMarkingPaid] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [upiOpened, setUpiOpened] = useState(false)
+  const [utrInput, setUtrInput] = useState('')
+  const [submittingResult, setSubmittingResult] = useState(false)
   const [paidDone, setPaidDone] = useState(false)
   // Live UPI IDs fetched from DB — always up to date, overrides stale cart data
   const [liveUpiIds, setLiveUpiIds] = useState<Record<string, string>>({})
@@ -379,25 +380,34 @@ function CartSheet({
     })
   }
 
-  const handleIHavePaid = async () => {
+  const handleOpenUpi = () => {
     if (!upiScreen) return
-    setMarkingPaid(true)
+    const pa = encodeURIComponent(upiScreen.upiId)
+    const pn = encodeURIComponent(upiScreen.farmerName)
+    const tn = encodeURIComponent('YourFamilyFarmer Order')
+    window.location.href = `upi://pay?pa=${pa}&pn=${pn}&am=${upiScreen.amount}&cu=INR&tn=${tn}`
+    setUpiOpened(true)
+  }
+
+  const handlePaymentSuccess = async () => {
+    if (!upiScreen) return
+    setSubmittingResult(true)
+    const update: Record<string, unknown> = { payment_status: 'pending_confirmation' }
+    if (utrInput.trim()) update.utr_number = utrInput.trim()
     await Promise.all(
       upiScreen.orderIds.map((id) =>
-        supabase.from('orders').update({ payment_status: 'payment_claimed' }).eq('id', id)
+        supabase.from('orders').update(update).eq('id', id)
       )
     )
     clearFarmer(upiScreen.farmerId)
-    setMarkingPaid(false)
+    setSubmittingResult(false)
     setPaidDone(true)
   }
 
-  const handleCopyUpi = () => {
-    if (!upiScreen) return
-    navigator.clipboard.writeText(upiScreen.upiId).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+  const handlePaymentFailed = () => {
+    setUpiScreen(null)
+    setUpiOpened(false)
+    setUtrInput('')
   }
 
   // Paid confirmation screen
@@ -407,8 +417,8 @@ function CartSheet({
         <div className="bg-white w-full max-w-md rounded-t-3xl px-6 py-10 flex flex-col items-center text-center gap-4">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-3xl">✓</div>
           <div>
-            <h2 className="font-extrabold text-gray-900 text-xl">Payment submitted!</h2>
-            <p className="text-green-700 font-semibold mt-0.5">చెల్లింపు సమర్పించబడింది!</p>
+            <h2 className="font-extrabold text-gray-900 text-xl">Payment recorded!</h2>
+            <p className="text-green-700 font-semibold mt-0.5">చెల్లింపు నమోదైంది!</p>
           </div>
           <div className="bg-gray-50 rounded-2xl px-5 py-4 w-full text-left space-y-1">
             <p className="text-xs text-gray-500 font-medium">Paid to</p>
@@ -435,23 +445,6 @@ function CartSheet({
 
   // UPI payment screen shown after placing a UPI order
   if (upiScreen) {
-    const pa = encodeURIComponent(upiScreen.upiId)
-    const pn = encodeURIComponent(upiScreen.farmerName)
-    const am = upiScreen.amount
-    const tn = encodeURIComponent('YourFamilyFarmer Order')
-
-    // Native app URL schemes — work in PWA standalone mode and all Android browsers
-    const gpayLink    = `tez://upi/pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
-    const phonepeLink = `phonepe://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
-    const paytmLink   = `paytmmp://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
-    const fallbackLink = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`
-
-    const openUpi = (appLink: string) => {
-      window.location.href = appLink
-      // If app isn't installed, fall back to generic UPI picker after 1.5 s
-      setTimeout(() => { window.location.href = fallbackLink }, 1500)
-    }
-
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
         {toast && (
@@ -472,80 +465,69 @@ function CartSheet({
             {/* Farmer + amount */}
             <div className="bg-green-50 rounded-2xl p-4 text-center">
               <p className="text-sm font-bold text-green-700">🧑‍🌾 {upiScreen.farmerName} · {upiScreen.farmerVillage}</p>
-              <p className="text-3xl font-black text-green-900 mt-2">Pay ₹{am}</p>
-              <p className="text-sm text-green-600 mt-0.5">₹{am} చెల్లించండి</p>
+              <p className="text-3xl font-black text-green-900 mt-2">Pay ₹{upiScreen.amount}</p>
+              <p className="text-sm text-green-600 mt-0.5">₹{upiScreen.amount} చెల్లించండి</p>
             </div>
 
-            {/* Three app buttons */}
-            <div>
-              <p className="text-xs font-bold text-gray-600 uppercase tracking-wide mb-3">
-                Choose your UPI app / యాప్ ఎంచుకోండి
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => openUpi(gpayLink)}
-                  className="flex flex-col items-center gap-2 bg-blue-50 border-2 border-blue-200 rounded-2xl py-5 active:bg-blue-100"
-                >
-                  <span className="text-2xl font-black text-blue-700">G</span>
-                  <span className="text-xs font-extrabold text-blue-900">GPay</span>
-                </button>
-                <button
-                  onClick={() => openUpi(phonepeLink)}
-                  className="flex flex-col items-center gap-2 bg-purple-50 border-2 border-purple-200 rounded-2xl py-5 active:bg-purple-100"
-                >
-                  <span className="text-2xl font-black text-purple-700">Pe</span>
-                  <span className="text-xs font-extrabold text-purple-900">PhonePe</span>
-                </button>
-                <button
-                  onClick={() => openUpi(paytmLink)}
-                  className="flex flex-col items-center gap-2 bg-sky-50 border-2 border-sky-200 rounded-2xl py-5 active:bg-sky-100"
-                >
-                  <span className="text-2xl font-black text-sky-700">PT</span>
-                  <span className="text-xs font-extrabold text-sky-900">Paytm</span>
-                </button>
-              </div>
+            {/* UPI ID display */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+              <p className="text-xs font-bold text-gray-500 mb-0.5">UPI ID / UPI గుర్తింపు</p>
+              <p className="font-mono text-base font-semibold text-gray-900 break-all">{upiScreen.upiId}</p>
             </div>
 
-            {/* UPI ID + copy */}
-            <div>
-              <p className="text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">
-                UPI ID / UPI గుర్తింపు
-              </p>
-              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-                <span className="flex-1 font-mono text-base font-semibold text-gray-900 break-all">
-                  {upiScreen.upiId}
-                </span>
+            {!upiOpened ? (
+              <>
+                {/* Single pay button */}
                 <button
-                  onClick={handleCopyUpi}
-                  className="flex-shrink-0 bg-white border border-gray-200 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-lg active:bg-gray-100"
+                  onClick={handleOpenUpi}
+                  className="w-full bg-green-700 text-white font-extrabold py-5 rounded-2xl text-lg active:bg-green-800"
                 >
-                  {copied ? '✓ Copied' : 'Copy'}
+                  📲 Pay via UPI / UPI ద్వారా చెల్లించండి
                 </button>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
-                Verify the payee name in your UPI app matches the farmer name above before paying.
-              </p>
-            </div>
+                <p className="text-center text-[11px] text-gray-400 leading-snug -mt-2 pb-2">
+                  Opens your default UPI app with all details pre-filled
+                </p>
+              </>
+            ) : (
+              <>
+                {/* After returning from UPI app */}
+                <div>
+                  <p className="text-sm font-bold text-gray-800 text-center mb-4">
+                    Did your payment go through? / చెల్లింపు విజయవంతమైందా?
+                  </p>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400 font-medium">After paying</span>
-              <div className="flex-1 h-px bg-gray-200" />
-            </div>
+                  {/* UTR input */}
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-gray-600 block mb-1.5">
+                      UTR / Transaction ID <span className="text-gray-400 font-normal">(optional / ఐచ్ఛికం)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={utrInput}
+                      onChange={(e) => setUtrInput(e.target.value)}
+                      placeholder="e.g. 123456789012"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-green-400"
+                    />
+                  </div>
 
-            {/* I have paid */}
-            <button
-              onClick={handleIHavePaid}
-              disabled={markingPaid}
-              className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800"
-            >
-              {markingPaid ? 'Saving...' : '✓ I have paid / చెల్లించాను'}
-            </button>
+                  <button
+                    onClick={handlePaymentSuccess}
+                    disabled={submittingResult}
+                    className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base mb-3 disabled:opacity-50 active:bg-green-800"
+                  >
+                    {submittingResult ? 'Saving...' : '✓ Payment Successful / చెల్లింపు విజయవంతమైంది'}
+                  </button>
 
-            <p className="text-center text-[11px] text-gray-500 leading-snug pb-2">
-              Waiting for farmer confirmation / రైతు నిర్ధారణ కోసం వేచి ఉంది
-            </p>
+                  <button
+                    onClick={handlePaymentFailed}
+                    disabled={submittingResult}
+                    className="w-full border-2 border-red-300 text-red-600 font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-red-50"
+                  >
+                    ✕ Payment Failed / చెల్లింపు విఫలమైంది
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

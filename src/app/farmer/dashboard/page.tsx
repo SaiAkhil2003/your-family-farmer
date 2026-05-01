@@ -79,6 +79,7 @@ type Order = {
   status: 'pending' | 'approved' | 'declined'
   payment_method: string | null
   payment_status: string | null
+  utr_number: string | null
   created_at: string
 }
 
@@ -219,6 +220,15 @@ export default function FarmerDashboard() {
     await supabase.from('orders').update({ payment_status: 'completed' }).eq('id', orderId)
     setPendingOrders((prev) =>
       prev.map((o) => o.id === orderId ? { ...o, payment_status: 'completed' } : o)
+    )
+    setProcessingPaidId(null)
+  }
+
+  const handleUpdatePaymentStatus = async (orderId: string, status: 'completed' | 'failed' | 'pending') => {
+    setProcessingPaidId(orderId)
+    await supabase.from('orders').update({ payment_status: status }).eq('id', orderId)
+    setPendingOrders((prev) =>
+      prev.map((o) => o.id === orderId ? { ...o, payment_status: status } : o)
     )
     setProcessingPaidId(null)
   }
@@ -387,6 +397,7 @@ export default function FarmerDashboard() {
                   onApprove={() => handleApprove(order.id)}
                   onDecline={() => handleDecline(order.id)}
                   onMarkPaid={() => handleMarkPaid(order.id)}
+                  onUpdatePaymentStatus={(s) => handleUpdatePaymentStatus(order.id, s)}
                 />
               ))
             )}
@@ -1918,6 +1929,7 @@ function OrderCard({
   onApprove,
   onDecline,
   onMarkPaid,
+  onUpdatePaymentStatus,
 }: {
   order: Order
   processing: boolean
@@ -1925,6 +1937,7 @@ function OrderCard({
   onApprove: () => void
   onDecline: () => void
   onMarkPaid: () => void
+  onUpdatePaymentStatus: (status: 'completed' | 'failed' | 'pending') => void
 }) {
   const { tx } = useLang()
 
@@ -1941,7 +1954,7 @@ function OrderCard({
   const isCod = !order.payment_method || order.payment_method === 'cod'
   const isUpi = order.payment_method === 'upi'
   const isPaid = order.payment_status === 'completed'
-  const isPaymentClaimed = order.payment_status === 'payment_claimed'
+  const isPaymentClaimed = order.payment_status === 'payment_claimed' || order.payment_status === 'pending_confirmation'
 
   return (
     <div className="border border-gray-200 rounded-2xl overflow-hidden">
@@ -1998,13 +2011,46 @@ function OrderCard({
       </div>
 
       {isUpi && isPaymentClaimed && (
-        <div className="mx-3 mb-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
-          <p className="text-xs font-bold text-orange-800">
-            📲 Buyer says they paid via UPI
+        <div className="mx-3 mb-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-3 space-y-2.5">
+          <div>
+            <p className="text-xs font-bold text-orange-800">
+              📲 Buyer says they paid via UPI
+            </p>
+            <p className="text-[11px] text-orange-700 mt-0.5">
+              Open your UPI app and confirm you received ₹{order.total_price ?? '?'} from {order.buyer_name || 'buyer'}.
+            </p>
+            {order.utr_number && (
+              <p className="text-[11px] text-orange-700 mt-0.5">
+                UTR: <span className="font-mono font-semibold">{order.utr_number}</span>
+              </p>
+            )}
+          </div>
+          <p className="text-xs font-bold text-gray-700">
+            Update Payment Status / చెల్లింపు స్థితి నవీకరించండి
           </p>
-          <p className="text-[11px] text-orange-700 mt-0.5">
-            Open your UPI app (GPay/PhonePe) and confirm you received ₹{order.total_price ?? '?'}. Then Approve below.
-          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => onUpdatePaymentStatus('completed')}
+              disabled={processingPaid}
+              className="bg-green-700 text-white font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 active:bg-green-800"
+            >
+              ✓ Received<br /><span className="font-normal">అందింది</span>
+            </button>
+            <button
+              onClick={() => onUpdatePaymentStatus('failed')}
+              disabled={processingPaid}
+              className="border-2 border-red-300 text-red-600 font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 active:bg-red-50"
+            >
+              ✕ Not Received<br /><span className="font-normal">రాలేదు</span>
+            </button>
+            <button
+              onClick={() => onUpdatePaymentStatus('pending')}
+              disabled={processingPaid}
+              className="border-2 border-amber-300 text-amber-700 font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 active:bg-amber-50"
+            >
+              ⏳ Pending<br /><span className="font-normal">పెండింగ్</span>
+            </button>
+          </div>
         </div>
       )}
 

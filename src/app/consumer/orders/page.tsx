@@ -93,7 +93,8 @@ export default function ConsumerOrdersPage() {
     if (!order.payment_method || order.payment_method === 'cod') return null
     if (order.payment_method === 'upi') {
       if (order.payment_status === 'completed') return { label: '✓ UPI Paid', cls: 'bg-green-100 text-green-800' }
-      if (order.payment_status === 'payment_claimed') return { label: '⏳ Payment sent — awaiting farmer', cls: 'bg-blue-100 text-blue-800' }
+      if (order.payment_status === 'pending_confirmation' || order.payment_status === 'payment_claimed') return { label: '⏳ Payment sent — awaiting farmer', cls: 'bg-blue-100 text-blue-800' }
+      if (order.payment_status === 'failed') return { label: '✕ Payment not received', cls: 'bg-red-100 text-red-800' }
       return { label: '📲 UPI — Pay now', cls: 'bg-orange-100 text-orange-800' }
     }
     return null
@@ -223,12 +224,12 @@ export default function ConsumerOrdersPage() {
                     {/* Pay Now button for pending UPI orders */}
                     {needsPayment && upiLink && (
                       <div className="pt-1 space-y-2">
-                        <a
-                          href={upiLink}
-                          className="block w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-sm text-center active:bg-blue-700"
+                        <button
+                          onClick={() => { window.location.href = upiLink }}
+                          className="w-full bg-green-700 text-white font-bold py-3 rounded-xl text-sm active:bg-green-800"
                         >
                           📲 Pay ₹{order.total_price} via UPI
-                        </a>
+                        </button>
                         <p className="text-[11px] text-gray-500 text-center">
                           UPI ID: <span className="font-mono font-semibold">{order.farmer?.upi_id}</span>
                         </p>
