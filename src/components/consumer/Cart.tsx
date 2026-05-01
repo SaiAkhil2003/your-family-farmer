@@ -196,8 +196,6 @@ function CartSheet({
   const [pickupDayByFarmer, setPickupDayByFarmer] = useState<Record<string, string>>({})
   const [toast, setToast] = useState('')
   const [placingUpiOrder, setPlacingUpiOrder] = useState<string | null>(null)
-  const [upiOpened, setUpiOpened] = useState(false)
-  const [utrInput, setUtrInput] = useState('')
   const [submittingResult, setSubmittingResult] = useState(false)
   const [paidDone, setPaidDone] = useState(false)
   // Live UPI IDs fetched from DB — always up to date, overrides stale cart data
@@ -335,11 +333,6 @@ function CartSheet({
       if (price) total += price
     }
 
-    if (total < 5) {
-      showToast('Minimum UPI payment is ₹5. Please add more items.')
-      setPlacingUpiOrder(null)
-      return
-    }
     total = 0
 
     for (const it of group) {
@@ -380,34 +373,17 @@ function CartSheet({
     })
   }
 
-  const handleOpenUpi = () => {
-    if (!upiScreen) return
-    const pa = encodeURIComponent(upiScreen.upiId)
-    const pn = encodeURIComponent(upiScreen.farmerName)
-    const tn = encodeURIComponent('YourFamilyFarmer Order')
-    window.location.href = `upi://pay?pa=${pa}&pn=${pn}&am=${upiScreen.amount}&cu=INR&tn=${tn}`
-    setUpiOpened(true)
-  }
-
   const handlePaymentSuccess = async () => {
     if (!upiScreen) return
     setSubmittingResult(true)
-    const update: Record<string, unknown> = { payment_status: 'pending_confirmation' }
-    if (utrInput.trim()) update.utr_number = utrInput.trim()
     await Promise.all(
       upiScreen.orderIds.map((id) =>
-        supabase.from('orders').update(update).eq('id', id)
+        supabase.from('orders').update({ payment_status: 'pending_confirmation' }).eq('id', id)
       )
     )
     clearFarmer(upiScreen.farmerId)
     setSubmittingResult(false)
     setPaidDone(true)
-  }
-
-  const handlePaymentFailed = () => {
-    setUpiScreen(null)
-    setUpiOpened(false)
-    setUtrInput('')
   }
 
   // Paid confirmation screen
@@ -445,13 +421,9 @@ function CartSheet({
 
   // UPI payment screen shown after placing a UPI order
   if (upiScreen) {
+    const pa = encodeURIComponent(upiScreen.upiId)
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
-        {toast && (
-          <div className="fixed top-5 left-0 right-0 flex justify-center z-[60] pointer-events-none px-4">
-            <div className="bg-gray-900 text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-xl">{toast}</div>
-          </div>
-        )}
         <div className="bg-white w-full max-w-md rounded-t-3xl max-h-[92vh] flex flex-col">
           <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100 rounded-t-3xl">
             <div>
@@ -461,73 +433,60 @@ function CartSheet({
             <button onClick={onClose} className="text-gray-400 text-3xl leading-none p-1">×</button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
             {/* Farmer + amount */}
             <div className="bg-green-50 rounded-2xl p-4 text-center">
-              <p className="text-sm font-bold text-green-700">🧑‍🌾 {upiScreen.farmerName} · {upiScreen.farmerVillage}</p>
-              <p className="text-3xl font-black text-green-900 mt-2">Pay ₹{upiScreen.amount}</p>
-              <p className="text-sm text-green-600 mt-0.5">₹{upiScreen.amount} చెల్లించండి</p>
+              <p className="text-sm font-bold text-green-700">🧑‍🌾 {upiScreen.farmerName}</p>
+              <p className="text-xs text-green-600 mt-0.5">{upiScreen.farmerVillage}</p>
+              <p className="text-4xl font-black text-green-900 mt-3">Pay ₹{upiScreen.amount}</p>
+              <p className="text-base font-semibold text-green-700 mt-1">₹{upiScreen.amount} చెల్లించండి</p>
             </div>
 
-            {/* UPI ID display */}
+            {/* UPI ID */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
               <p className="text-xs font-bold text-gray-500 mb-0.5">UPI ID / UPI గుర్తింపు</p>
               <p className="font-mono text-base font-semibold text-gray-900 break-all">{upiScreen.upiId}</p>
             </div>
 
-            {!upiOpened ? (
-              <>
-                {/* Single pay button */}
-                <button
-                  onClick={handleOpenUpi}
-                  className="w-full bg-green-700 text-white font-extrabold py-5 rounded-2xl text-lg active:bg-green-800"
-                >
-                  📲 Pay via UPI / UPI ద్వారా చెల్లించండి
-                </button>
-                <p className="text-center text-[11px] text-gray-400 leading-snug -mt-2 pb-2">
-                  Opens your default UPI app with all details pre-filled
-                </p>
-              </>
-            ) : (
-              <>
-                {/* After returning from UPI app */}
-                <div>
-                  <p className="text-sm font-bold text-gray-800 text-center mb-4">
-                    Did your payment go through? / చెల్లింపు విజయవంతమైందా?
-                  </p>
+            {/* Instruction */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+              <p className="text-sm font-semibold text-amber-800">Enter this amount manually in your UPI app</p>
+              <p className="text-xs text-amber-700 mt-0.5">మీ UPI యాప్‌లో మీరే మొత్తం నమోదు చేయండి</p>
+            </div>
 
-                  {/* UTR input */}
-                  <div className="mb-4">
-                    <label className="text-xs font-bold text-gray-600 block mb-1.5">
-                      UTR / Transaction ID <span className="text-gray-400 font-normal">(optional / ఐచ్ఛికం)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={utrInput}
-                      onChange={(e) => setUtrInput(e.target.value)}
-                      placeholder="e.g. 123456789012"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-green-400"
-                    />
-                  </div>
+            {/* App buttons */}
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                onClick={() => { window.location.href = `gpay://upi/pay?pa=${pa}` }}
+                className="flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-200 rounded-2xl py-4 active:bg-gray-50"
+              >
+                <span className="text-2xl font-black" style={{ color: '#4285F4' }}>G</span>
+                <span className="text-xs font-bold text-gray-700">GPay</span>
+              </button>
+              <button
+                onClick={() => { window.location.href = `phonepe://pay?pa=${pa}` }}
+                className="flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-200 rounded-2xl py-4 active:bg-gray-50"
+              >
+                <span className="text-2xl font-black" style={{ color: '#5f259f' }}>Pe</span>
+                <span className="text-xs font-bold text-gray-700">PhonePe</span>
+              </button>
+              <button
+                onClick={() => { window.location.href = `paytmmp://pay?pa=${pa}` }}
+                className="flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-200 rounded-2xl py-4 active:bg-gray-50"
+              >
+                <span className="text-2xl font-black" style={{ color: '#00BAF2' }}>Pt</span>
+                <span className="text-xs font-bold text-gray-700">Paytm</span>
+              </button>
+            </div>
 
-                  <button
-                    onClick={handlePaymentSuccess}
-                    disabled={submittingResult}
-                    className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base mb-3 disabled:opacity-50 active:bg-green-800"
-                  >
-                    {submittingResult ? 'Saving...' : '✓ Payment Successful / చెల్లింపు విజయవంతమైంది'}
-                  </button>
-
-                  <button
-                    onClick={handlePaymentFailed}
-                    disabled={submittingResult}
-                    className="w-full border-2 border-red-300 text-red-600 font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-red-50"
-                  >
-                    ✕ Payment Failed / చెల్లింపు విఫలమైంది
-                  </button>
-                </div>
-              </>
-            )}
+            {/* Paid confirmation */}
+            <button
+              onClick={handlePaymentSuccess}
+              disabled={submittingResult}
+              className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800"
+            >
+              {submittingResult ? 'Saving...' : '✓ I have paid / చెల్లించాను'}
+            </button>
           </div>
         </div>
       </div>
