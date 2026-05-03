@@ -548,8 +548,9 @@ function ProfileEditModal({
   const [slotFrom, setSlotFrom] = useState(farmer.pickup_slots?.time_from ?? '08:00')
   const [slotTo, setSlotTo]   = useState(farmer.pickup_slots?.time_to   ?? '12:00')
 
-  // UPI ID + QR
+  // UPI payment setup
   const [upiId, setUpiId] = useState(farmer.upi_id ?? '')
+  const [upiName, setUpiName] = useState(farmer.upi_name ?? '')
   const [qrFile, setQrFile] = useState<File | null>(null)
   const [qrPreview, setQrPreview] = useState('')
   const [existingQrUrl, setExistingQrUrl] = useState(farmer.upi_qr_code_url ?? '')
@@ -563,6 +564,13 @@ function ProfileEditModal({
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const trimmedUpiId = upiId.trim()
+  const trimmedUpiName = upiName.trim()
+  const trimmedQrUrl = existingQrUrl.trim()
+  const upiIdIsValid = !trimmedUpiId || trimmedUpiId.includes('@')
+  const qrUrlIsValid = !trimmedQrUrl || /^https?:\/\//.test(trimmedQrUrl)
+  const payeeNamePreview = trimmedUpiName || name.trim() || farmer.name.trim() || 'Farmer'
+  const qrPreviewUrl = qrPreview || trimmedQrUrl
 
   const handleFarmerGPS = () => {
     if (!navigator.geolocation) {
@@ -639,8 +647,12 @@ function ProfileEditModal({
   const handleSave = async () => {
     if (!name.trim()) { setError(tx.nameRequired); return }
     if (!village.trim()) { setError(tx.villageRequired); return }
-    if (upiId.trim() && !/^[a-zA-Z0-9._\-]{2,256}@[a-zA-Z]{2,64}$/.test(upiId.trim())) {
-      setError('Invalid UPI ID format. Example: yourname@ybl or 9876543210@paytm')
+    if (trimmedUpiId && !trimmedUpiId.includes('@')) {
+      setError('Enter a valid UPI ID, for example farmername@upi')
+      return
+    }
+    if (trimmedQrUrl && !/^https?:\/\//.test(trimmedQrUrl)) {
+      setError('Enter a valid QR code URL starting with http:// or https://')
       return
     }
     setLoading(true)
@@ -680,8 +692,9 @@ function ProfileEditModal({
       cover_photo_url:  (coverRes.url ?? existingCoverUrl) || null,
       photo_url:        (avatarRes.url ?? existingAvatarUrl) || null,
       pesticide_cert_url: (certRes.url ?? existingCertUrl) || null,
-      upi_id:           upiId.trim() || null,
-      upi_qr_code_url:  (qrRes.url ?? existingQrUrl) || null,
+      upi_id:           trimmedUpiId || null,
+      upi_name:         trimmedUpiName || null,
+      upi_qr_code_url:  (qrRes.url ?? trimmedQrUrl) || null,
       pickup_slots: slotDays.length > 0
         ? { days: slotDays, time_from: slotFrom, time_to: slotTo }
         : null,
@@ -988,67 +1001,127 @@ function ProfileEditModal({
             )}
           </div>
 
-          {/* Payment Details */}
-          <div className="space-y-4 border border-gray-200 rounded-2xl p-4">
-            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-              Payment Details / చెల్లింపు వివరాలు
-            </p>
+          {/* UPI payment setup */}
+          <div className="space-y-4 border border-gray-200 rounded-2xl p-4 bg-blue-50/40">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-blue-900 uppercase tracking-wide">
+                UPI payment setup
+              </p>
+              <p className="text-[11px] text-blue-800 leading-snug">
+                Buyers pay directly to your UPI account. YourFamilyFarmer does not collect payment or commission.
+              </p>
+            </div>
 
-            {/* UPI ID */}
             <div>
               <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1">
                 UPI ID
               </label>
               <p className="text-[11px] text-gray-500 mb-2">
-                Buyers will pay directly to this ID. Example: yourname@ybl, 9876543210@paytm
+                Buyers use this to pay you directly.
               </p>
               <input
                 type="text"
                 inputMode="email"
-                placeholder="yourname@ybl"
+                placeholder="farmername@upi"
                 value={upiId}
-                onChange={(e) => setUpiId(e.target.value.trim())}
+                onChange={(e) => setUpiId(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
               />
-              {upiId.trim() && (
+              {!trimmedUpiId ? (
+                <p className="text-[11px] text-amber-700 mt-1 font-medium">
+                  If this is empty, UPI payments will be unavailable and buyers will order on WhatsApp.
+                </p>
+              ) : !upiIdIsValid ? (
+                <p className="text-[11px] text-red-600 mt-1 font-medium">
+                  Enter a valid UPI ID, for example farmername@upi
+                </p>
+              ) : (
                 <p className="text-[11px] text-green-700 mt-1 font-medium">
                   ✓ Buyers can pay directly to this UPI ID
                 </p>
               )}
             </div>
 
-            {/* UPI QR Code */}
             <div>
               <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1">
-                UPI QR Code (optional) / UPI QR కోడ్
+                UPI Payee Name
               </label>
               <p className="text-[11px] text-gray-500 mb-2">
-                Buyers can scan this to pay. Get your QR from PhonePe, GPay, or BHIM app.
+                This name is shown in the buyer&apos;s UPI app. If empty, your farmer name will be used.
               </p>
-              {(existingQrUrl && !qrPreview) ? (
-                <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={existingQrUrl} alt="QR Code" className="w-12 h-12 object-contain rounded" />
-                  <span className="text-green-700 font-semibold text-sm flex-1">✓ QR code uploaded</span>
-                  <button
-                    type="button"
-                    onClick={() => setExistingQrUrl('')}
-                    className="text-xs text-red-500 underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <ProfilePhotoUpload
-                  preview={qrPreview}
-                  existingUrl=""
-                  onPick={(e) => handlePickFile(e, setQrFile, setQrPreview, qrPreview)}
-                  onClear={() => { if (qrPreview) URL.revokeObjectURL(qrPreview); setQrFile(null); setQrPreview('') }}
-                  takeLabel="Take photo"
-                  galleryLabel="Upload QR"
-                  aspectClass="aspect-square max-w-[180px]"
-                />
+              <input
+                type="text"
+                placeholder="Yadagiri Natural Farm"
+                value={upiName}
+                onChange={(e) => setUpiName(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1">
+                UPI QR Code URL
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Optional. Buyers can scan this QR code, but UPI ID payment will still work without it.
+              </p>
+              <input
+                type="url"
+                inputMode="url"
+                placeholder="https://..."
+                value={existingQrUrl}
+                onChange={(e) => setExistingQrUrl(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+              />
+              {trimmedQrUrl && !qrUrlIsValid && (
+                <p className="text-[11px] text-red-600 mt-1 font-medium">
+                  Enter a valid QR code URL starting with http:// or https://
+                </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Preview
+              </p>
+              <div className="rounded-2xl border border-blue-200 bg-white p-3 space-y-2">
+                <p className="text-xs text-gray-500">
+                  UPI ID: <span className="font-semibold text-gray-900">{trimmedUpiId || 'Not set'}</span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Payee name used: <span className="font-semibold text-gray-900">{payeeNamePreview}</span>
+                </p>
+                {qrPreviewUrl && qrUrlIsValid && (
+                  <div className="pt-1">
+                    <p className="text-xs text-gray-500 mb-2">QR preview</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={qrPreviewUrl} alt="UPI QR preview" className="w-24 h-24 object-contain rounded-xl border border-gray-200 bg-gray-50" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1">
+                Upload QR image (optional)
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                You can upload a QR image instead of pasting a URL. The uploaded image will be saved as your QR code URL.
+              </p>
+              <ProfilePhotoUpload
+                preview={qrPreview}
+                existingUrl={qrUrlIsValid ? trimmedQrUrl : ''}
+                onPick={(e) => handlePickFile(e, setQrFile, setQrPreview, qrPreview)}
+                onClear={() => {
+                  if (qrPreview) URL.revokeObjectURL(qrPreview)
+                  setQrFile(null)
+                  setQrPreview('')
+                  setExistingQrUrl('')
+                }}
+                takeLabel="Take photo"
+                galleryLabel="Upload QR"
+                aspectClass="aspect-square max-w-[180px]"
+              />
             </div>
           </div>
 
