@@ -128,7 +128,7 @@ export default function BrowseProduceTab({
             const farmer = getFarmer(item.farmer_id)
             if (!farmer) return null
             const added = addedIds.has(item.id)
-            const inCart = !!cart[item.id]
+            const inCart = cart[item.id]
 
             return (
               <ProduceCard

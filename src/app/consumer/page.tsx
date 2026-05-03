@@ -445,6 +445,7 @@ function ProduceCard({ item, distanceKm }: { item: ProduceListing; distanceKm?: 
   const [liveStock, setLiveStock] = useState<number | null>(item.stock_qty ?? null)
   const [stockMsg, setStockMsg]   = useState('')
   const [adding, setAdding]       = useState(false)
+  const [added, setAdded]         = useState(false)
   const [quantity, setQuantity]   = useState(1)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
 
@@ -541,6 +542,8 @@ function ProduceCard({ item, distanceKm }: { item: ProduceListing; distanceKm?: 
       farmerUpiName: farmer.upi_name ?? farmer.name,
       farmerQrCodeUrl: farmer.upi_qr_code_url ?? undefined,
     }, selectedQty)
+    setAdded(true)
+    setTimeout(() => setAdded(false), 1500)
   }
 
   const updateQuantity = (nextQty: number) => {

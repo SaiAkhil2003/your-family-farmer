@@ -45,7 +45,7 @@ export default function StoryTab({ farmer }: { farmer: Record<string, unknown> }
     <div className="space-y-5">
       {f.story_quote && (
         <blockquote className="bg-green-50 border-l-4 border-green-700 px-4 py-3 rounded-r-lg">
-          <p className="text-sm italic text-green-900 leading-relaxed">"{f.story_quote}"</p>
+          <p className="text-sm italic text-green-900 leading-relaxed">&ldquo;{f.story_quote}&rdquo;</p>
           <cite className="text-xs text-green-700 font-semibold mt-2 block">— {f.name}</cite>
         </blockquote>
       )}
