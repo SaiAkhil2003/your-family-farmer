@@ -36,6 +36,7 @@ type Farmer = {
   lng: number | null
   location_name: string | null
   upi_id: string | null
+  upi_name: string | null
   upi_qr_code_url: string | null
 }
 

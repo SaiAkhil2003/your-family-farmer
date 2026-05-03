@@ -31,6 +31,7 @@ export type CartItem = {
   farmerPickupLocations?: string[]
   farmerPickupSlots?: PickupSlots | null
   farmerUpiId?: string
+  farmerUpiName?: string
   farmerQrCodeUrl?: string
 }
 

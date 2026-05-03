@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useLang } from '@/lib/LanguageContext'
 import LanguageToggle from '@/components/LanguageToggle'
+import { buildUpiPaymentUrl, resolveUpiPayeeName } from '@/lib/upi'
 
 type Order = {
   id: string
@@ -22,6 +23,7 @@ type Order = {
     slug: string
     village: string
     upi_id: string | null
+    upi_name: string | null
   } | null
 }
 
@@ -57,15 +59,24 @@ export default function ConsumerOrdersPage() {
 
     // Fetch farmer names in one query
     const farmerIds = [...new Set((data ?? []).map((o) => o.farmer_id).filter(Boolean))]
-    let farmerMap: Record<string, { name: string; slug: string; village: string; upi_id: string | null }> = {}
+    let farmerMap: Record<string, { name: string; slug: string; village: string; upi_id: string | null; upi_name: string | null }> = {}
 
     if (farmerIds.length > 0) {
       const { data: farmers } = await supabase
         .from('farmers')
-        .select('id, name, slug, village, upi_id')
+        .select('id, name, slug, village, upi_id, upi_name')
         .in('id', farmerIds)
       farmerMap = Object.fromEntries(
-        (farmers ?? []).map((f) => [f.id, { name: f.name, slug: f.slug, village: f.village, upi_id: (f.upi_id as string | null) ?? null }]),
+        (farmers ?? []).map((f) => [
+          f.id,
+          {
+            name: f.name,
+            slug: f.slug,
+            village: f.village,
+            upi_id: (f.upi_id as string | null) ?? null,
+            upi_name: (f.upi_name as string | null) ?? null,
+          },
+        ]),
       )
     }
 
@@ -171,7 +182,14 @@ export default function ConsumerOrdersPage() {
                 && order.payment_status === 'pending'
                 && order.farmer?.upi_id
               const upiLink = needsPayment
-                ? `upi://pay?pa=${encodeURIComponent(order.farmer!.upi_id!)}&pn=${encodeURIComponent(order.farmer!.name)}&am=${order.total_price ?? 0}&cu=INR&tn=YourFamilyFarmer%20Order`
+                ? buildUpiPaymentUrl({
+                    upiId: order.farmer?.upi_id,
+                    payeeName: resolveUpiPayeeName(order.farmer?.upi_name, order.farmer?.name),
+                    amount: order.total_price ?? 0,
+                    produceName: order.produce_name || 'Produce',
+                    quantity: order.quantity ?? 1,
+                    unit: order.unit || 'kg',
+                  })
                 : null
               return (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
