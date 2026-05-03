@@ -36,6 +36,7 @@ type Farmer = {
   lng: number | null
   location_name: string | null
   upi_id: string | null
+  upi_qr_code_url: string | null
 }
 
 type DemandBar = {
@@ -546,8 +547,11 @@ function ProfileEditModal({
   const [slotFrom, setSlotFrom] = useState(farmer.pickup_slots?.time_from ?? '08:00')
   const [slotTo, setSlotTo]   = useState(farmer.pickup_slots?.time_to   ?? '12:00')
 
-  // UPI ID
+  // UPI ID + QR
   const [upiId, setUpiId] = useState(farmer.upi_id ?? '')
+  const [qrFile, setQrFile] = useState<File | null>(null)
+  const [qrPreview, setQrPreview] = useState('')
+  const [existingQrUrl, setExistingQrUrl] = useState(farmer.upi_qr_code_url ?? '')
 
   // Farm GPS location
   const [farmerLat, setFarmerLat] = useState<number | null>(farmer.lat ?? null)
@@ -656,12 +660,13 @@ function ProfileEditModal({
     }
 
     // Upload photos in parallel
-    const [coverRes, avatarRes, certRes] = await Promise.all([
+    const [coverRes, avatarRes, certRes, qrRes] = await Promise.all([
       coverFile ? uploadProfileImage(coverFile, 'cover') : Promise.resolve({ url: null, err: null }),
       avatarFile ? uploadProfileImage(avatarFile, 'avatar') : Promise.resolve({ url: null, err: null }),
       certFile  ? uploadProfileImage(certFile,  'pesticide-cert') : Promise.resolve({ url: null, err: null }),
+      qrFile    ? uploadProfileImage(qrFile,    'upi-qr') : Promise.resolve({ url: null, err: null }),
     ])
-    const uploadErr = coverRes.err ?? avatarRes.err ?? certRes.err
+    const uploadErr = coverRes.err ?? avatarRes.err ?? certRes.err ?? qrRes.err
     if (uploadErr) { setError(uploadErr); setLoading(false); return }
 
     const payload: Record<string, unknown> = {
@@ -675,6 +680,7 @@ function ProfileEditModal({
       photo_url:        (avatarRes.url ?? existingAvatarUrl) || null,
       pesticide_cert_url: (certRes.url ?? existingCertUrl) || null,
       upi_id:           upiId.trim() || null,
+      upi_qr_code_url:  (qrRes.url ?? existingQrUrl) || null,
       pickup_slots: slotDays.length > 0
         ? { days: slotDays, time_from: slotFrom, time_to: slotTo }
         : null,
@@ -981,27 +987,68 @@ function ProfileEditModal({
             )}
           </div>
 
-          {/* UPI ID */}
-          <div>
-            <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block mb-1">
-              UPI ID for payments / పేమెంట్ కోసం UPI ID
-            </label>
-            <p className="text-[11px] text-gray-500 mb-2">
-              Buyers will pay directly to this UPI ID. Example: yourname@ybl, 9876543210@paytm
+          {/* Payment Details */}
+          <div className="space-y-4 border border-gray-200 rounded-2xl p-4">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+              Payment Details / చెల్లింపు వివరాలు
             </p>
-            <input
-              type="text"
-              inputMode="email"
-              placeholder="yourname@ybl"
-              value={upiId}
-              onChange={(e) => setUpiId(e.target.value.trim())}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
-            />
-            {upiId.trim() && (
-              <p className="text-[11px] text-green-700 mt-1 font-medium">
-                ✓ Buyers can pay directly to this UPI ID
+
+            {/* UPI ID */}
+            <div>
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1">
+                UPI ID
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Buyers will pay directly to this ID. Example: yourname@ybl, 9876543210@paytm
               </p>
-            )}
+              <input
+                type="text"
+                inputMode="email"
+                placeholder="yourname@ybl"
+                value={upiId}
+                onChange={(e) => setUpiId(e.target.value.trim())}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+              />
+              {upiId.trim() && (
+                <p className="text-[11px] text-green-700 mt-1 font-medium">
+                  ✓ Buyers can pay directly to this UPI ID
+                </p>
+              )}
+            </div>
+
+            {/* UPI QR Code */}
+            <div>
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-1">
+                UPI QR Code (optional) / UPI QR కోడ్
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Buyers can scan this to pay. Get your QR from PhonePe, GPay, or BHIM app.
+              </p>
+              {(existingQrUrl && !qrPreview) ? (
+                <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={existingQrUrl} alt="QR Code" className="w-12 h-12 object-contain rounded" />
+                  <span className="text-green-700 font-semibold text-sm flex-1">✓ QR code uploaded</span>
+                  <button
+                    type="button"
+                    onClick={() => setExistingQrUrl('')}
+                    className="text-xs text-red-500 underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <ProfilePhotoUpload
+                  preview={qrPreview}
+                  existingUrl=""
+                  onPick={(e) => handlePickFile(e, setQrFile, setQrPreview, qrPreview)}
+                  onClear={() => { if (qrPreview) URL.revokeObjectURL(qrPreview); setQrFile(null); setQrPreview('') }}
+                  takeLabel="Take photo"
+                  galleryLabel="Upload QR"
+                  aspectClass="aspect-square max-w-[180px]"
+                />
+              )}
+            </div>
           </div>
 
           {error && (

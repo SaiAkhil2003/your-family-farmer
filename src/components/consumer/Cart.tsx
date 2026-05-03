@@ -31,6 +31,7 @@ export type CartItem = {
   farmerPickupLocations?: string[]
   farmerPickupSlots?: PickupSlots | null
   farmerUpiId?: string
+  farmerQrCodeUrl?: string
 }
 
 export type CartState = Record<string, CartItem>
@@ -198,13 +199,19 @@ function CartSheet({
   const [placingUpiOrder, setPlacingUpiOrder] = useState<string | null>(null)
   const [submittingResult, setSubmittingResult] = useState(false)
   const [paidDone, setPaidDone] = useState(false)
-  // Live UPI IDs fetched from DB — always up to date, overrides stale cart data
+  // Live UPI IDs and QR codes fetched from DB — always up to date, overrides stale cart data
   const [liveUpiIds, setLiveUpiIds] = useState<Record<string, string>>({})
+  const [liveQrUrls, setLiveQrUrls] = useState<Record<string, string>>({})
+  const [showUpiAppFallback, setShowUpiAppFallback] = useState(false)
+  const [utrNote, setUtrNote] = useState('')
+  const [cashMode, setCashMode] = useState(false)
+  const [switchingToCash, setSwitchingToCash] = useState(false)
 
   type UpiPaymentState = {
     farmerName: string
     farmerVillage: string
     upiId: string
+    qrCodeUrl?: string
     amount: number
     orderIds: string[]
     farmerId: string
@@ -216,21 +223,24 @@ function CartSheet({
     setTimeout(() => setToast(''), 3000)
   }
 
-  // Fetch latest UPI IDs for all farmers in cart when sheet opens
+  // Fetch latest UPI IDs and QR codes for all farmers in cart when sheet opens
   useEffect(() => {
     const farmerIds = [...new Set(items.map((i) => i.farmerId).filter(Boolean))]
     if (farmerIds.length === 0) return
     supabase
       .from('farmers')
-      .select('id, upi_id')
+      .select('id, upi_id, upi_qr_code_url')
       .in('id', farmerIds)
       .then(({ data }) => {
         if (!data) return
-        const map: Record<string, string> = {}
+        const upiMap: Record<string, string> = {}
+        const qrMap: Record<string, string> = {}
         for (const f of data) {
-          if (f.upi_id) map[f.id] = f.upi_id
+          if (f.upi_id) upiMap[f.id] = f.upi_id
+          if (f.upi_qr_code_url) qrMap[f.id] = f.upi_qr_code_url
         }
-        setLiveUpiIds(map)
+        setLiveUpiIds(upiMap)
+        setLiveQrUrls(qrMap)
       })
   }, [items])
 
@@ -317,9 +327,13 @@ function CartSheet({
   const handleUpiOrderFarmer = async (group: CartItem[]) => {
     if (detailsMissing) return
     const f = group[0]
-    const upiId = liveUpiIds[f.farmerId] ?? f.farmerUpiId
-    if (!upiId) return
+    const upiId = liveUpiIds[f.farmerId] ?? f.farmerUpiId ?? ''
+    const qrCodeUrl = liveQrUrls[f.farmerId] ?? f.farmerQrCodeUrl
+    if (!upiId && !qrCodeUrl) return
 
+    setUtrNote('')
+    setShowUpiAppFallback(false)
+    setCashMode(false)
     saveInfo({ name: name.trim(), phone: phone.trim() })
     setPlacingUpiOrder(f.farmerId)
 
@@ -366,7 +380,8 @@ function CartSheet({
     setUpiScreen({
       farmerName: f.farmerName,
       farmerVillage: f.farmerVillage,
-      upiId: upiId,
+      upiId,
+      qrCodeUrl,
       amount: total,
       orderIds,
       farmerId: f.farmerId,
@@ -376,9 +391,11 @@ function CartSheet({
   const handlePaymentSuccess = async () => {
     if (!upiScreen) return
     setSubmittingResult(true)
+    const updateData: Record<string, unknown> = { payment_status: 'pending_confirmation' }
+    if (utrNote.trim()) updateData.utr_number = utrNote.trim()
     await Promise.all(
       upiScreen.orderIds.map((id) =>
-        supabase.from('orders').update({ payment_status: 'pending_confirmation' }).eq('id', id)
+        supabase.from('orders').update(updateData).eq('id', id)
       )
     )
     clearFarmer(upiScreen.farmerId)
@@ -386,28 +403,66 @@ function CartSheet({
     setPaidDone(true)
   }
 
-  // Paid confirmation screen
+  const handleCashOnPickup = async () => {
+    if (!upiScreen) return
+    setSwitchingToCash(true)
+    await Promise.all(
+      upiScreen.orderIds.map((id) =>
+        supabase.from('orders').update({ payment_method: 'cod', payment_status: 'pending' }).eq('id', id)
+      )
+    )
+    clearFarmer(upiScreen.farmerId)
+    setSwitchingToCash(false)
+    setCashMode(true)
+    setPaidDone(true)
+  }
+
+  const handleOpenUpiApp = () => {
+    if (!upiScreen?.upiId) return
+    setShowUpiAppFallback(false)
+    const link = `upi://pay?pa=${encodeURIComponent(upiScreen.upiId)}&pn=${encodeURIComponent(upiScreen.farmerName)}&am=${upiScreen.amount}&cu=INR`
+    window.location.href = link
+    const t = setTimeout(() => setShowUpiAppFallback(true), 2500)
+    const cleanup = () => { clearTimeout(t); setShowUpiAppFallback(false) }
+    window.addEventListener('blur', cleanup, { once: true })
+  }
+
+  // Success screen — shown after I Have Paid or Cash on Pickup
   if (upiScreen && paidDone) {
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
         <div className="bg-white w-full max-w-md rounded-t-3xl px-6 py-10 flex flex-col items-center text-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-3xl">✓</div>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl ${cashMode ? 'bg-amber-100' : 'bg-green-100'}`}>
+            {cashMode ? '💵' : '✓'}
+          </div>
           <div>
-            <h2 className="font-extrabold text-gray-900 text-xl">Payment recorded!</h2>
-            <p className="text-green-700 font-semibold mt-0.5">చెల్లింపు నమోదైంది!</p>
+            <h2 className="font-extrabold text-gray-900 text-xl">
+              {cashMode ? 'Order placed!' : 'Payment recorded!'}
+            </h2>
+            <p className={`font-semibold mt-0.5 ${cashMode ? 'text-amber-700' : 'text-green-700'}`}>
+              {cashMode ? 'Cash on Pickup / నగదు పికప్' : 'చెల్లింపు నమోదైంది!'}
+            </p>
           </div>
           <div className="bg-gray-50 rounded-2xl px-5 py-4 w-full text-left space-y-1">
-            <p className="text-xs text-gray-500 font-medium">Paid to</p>
+            <p className="text-xs text-gray-500 font-medium">{cashMode ? 'Order for' : 'Paid to'}</p>
             <p className="font-bold text-gray-900">{upiScreen.farmerName}</p>
             <p className="text-xs text-gray-500">{upiScreen.farmerVillage}</p>
             <p className="text-lg font-black text-green-900 mt-2">₹{upiScreen.amount}</p>
           </div>
-          <p className="text-sm text-gray-600 leading-snug">
-            Waiting for farmer confirmation / రైతు నిర్ధారణ కోసం వేచి ఉంది
-          </p>
-          <p className="text-xs text-gray-400 leading-snug">
-            The farmer will verify the payment in their UPI app and confirm your order via WhatsApp.
-          </p>
+          {cashMode ? (
+            <p className="text-sm text-gray-600 leading-snug">
+              Pay ₹{upiScreen.amount} in cash when you collect your order from the farmer.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 leading-snug">
+                Waiting for farmer confirmation / రైతు నిర్ధారణ కోసం వేచి ఉంది
+              </p>
+              <p className="text-xs text-gray-400 leading-snug">
+                The farmer will check their UPI app and confirm your payment.
+              </p>
+            </>
+          )}
           <button
             onClick={onClose}
             className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base active:bg-green-800 mt-2"
@@ -419,73 +474,118 @@ function CartSheet({
     )
   }
 
-  // UPI payment screen shown after placing a UPI order
+  // Payment screen shown after placing an order
   if (upiScreen) {
-    const pa = encodeURIComponent(upiScreen.upiId)
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
         <div className="bg-white w-full max-w-md rounded-t-3xl max-h-[92vh] flex flex-col">
           <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100 rounded-t-3xl">
             <div>
-              <h2 className="font-extrabold text-gray-900 text-lg">Pay via UPI / UPI చెల్లించండి</h2>
-              <p className="text-xs text-gray-500">Pay directly to the farmer</p>
+              <h2 className="font-extrabold text-gray-900 text-lg">Pay Farmer / రైతుకు చెల్లించండి</h2>
+              <p className="text-xs text-gray-500">Pay directly — no middleman</p>
             </div>
             <button onClick={onClose} className="text-gray-400 text-3xl leading-none p-1">×</button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
-            {/* Farmer + amount */}
+            {/* Amount + farmer */}
             <div className="bg-green-50 rounded-2xl p-4 text-center">
               <p className="text-sm font-bold text-green-700">🧑‍🌾 {upiScreen.farmerName}</p>
               <p className="text-xs text-green-600 mt-0.5">{upiScreen.farmerVillage}</p>
-              <p className="text-4xl font-black text-green-900 mt-3">Pay ₹{upiScreen.amount}</p>
-              <p className="text-base font-semibold text-green-700 mt-1">₹{upiScreen.amount} చెల్లించండి</p>
+              <p className="text-4xl font-black text-green-900 mt-3">₹{upiScreen.amount}</p>
+              <p className="text-sm text-green-700 mt-1">Total amount to pay</p>
             </div>
 
-            {/* UPI ID */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-              <p className="text-xs font-bold text-gray-500 mb-0.5">UPI ID / UPI గుర్తింపు</p>
-              <p className="font-mono text-base font-semibold text-gray-900 break-all">{upiScreen.upiId}</p>
-            </div>
+            {/* QR code (if available) */}
+            {upiScreen.qrCodeUrl && (
+              <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 flex flex-col items-center gap-2">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Scan QR Code to Pay</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={upiScreen.qrCodeUrl} alt="UPI QR Code" className="w-48 h-48 object-contain rounded-xl" />
+                <p className="text-[11px] text-gray-500 text-center">Open any UPI app → Scan QR / QR స్కాన్ చేయండి</p>
+              </div>
+            )}
+
+            {/* UPI ID + copy (if UPI ID exists) */}
+            {upiScreen.upiId && (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-500 mb-0.5">UPI ID</p>
+                  <p className="font-mono text-sm font-semibold text-gray-900 break-all">{upiScreen.upiId}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(upiScreen.upiId).catch(() => {})
+                    showToast('UPI ID copied! / కాపీ అయింది')
+                  }}
+                  className="flex-shrink-0 bg-gray-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs active:bg-gray-900"
+                >
+                  Copy
+                </button>
+              </div>
+            )}
+
+            {/* Open UPI App (only if UPI ID exists) */}
+            {upiScreen.upiId && (
+              <div className="space-y-2">
+                <button
+                  onClick={handleOpenUpiApp}
+                  className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-base active:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  📲 Open UPI App / UPI యాప్ తెరవండి
+                </button>
+                {showUpiAppFallback && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <p className="text-sm font-semibold text-amber-800 text-center">App did not open automatically.</p>
+                    <p className="text-xs text-amber-700 text-center mt-1">
+                      Please copy the UPI ID and pay manually using PhonePe, Google Pay, Paytm, or BHIM.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Instruction */}
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
-              <p className="text-sm font-semibold text-amber-800">Enter this amount manually in your UPI app</p>
+              <p className="text-sm font-semibold text-amber-800">Enter the amount manually in your UPI app</p>
               <p className="text-xs text-amber-700 mt-0.5">మీ UPI యాప్‌లో మీరే మొత్తం నమోదు చేయండి</p>
             </div>
 
-            {/* App buttons */}
-            <div className="grid grid-cols-3 gap-3">
+            {/* Cash on Pickup option */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 space-y-2">
+              <p className="text-sm font-bold text-gray-700">💵 Prefer Cash on Pickup? / నగదు చెల్లించాలా?</p>
+              <p className="text-xs text-gray-500">Pay cash directly to the farmer when you collect your order.</p>
               <button
-                onClick={() => { window.location.href = `gpay://upi/pay?pa=${pa}` }}
-                className="flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-200 rounded-2xl py-4 active:bg-gray-50"
+                onClick={handleCashOnPickup}
+                disabled={switchingToCash || submittingResult}
+                className="w-full border-2 border-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm active:bg-gray-100 disabled:opacity-50"
               >
-                <span className="text-2xl font-black" style={{ color: '#4285F4' }}>G</span>
-                <span className="text-xs font-bold text-gray-700">GPay</span>
-              </button>
-              <button
-                onClick={() => { window.location.href = `phonepe://pay?pa=${pa}` }}
-                className="flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-200 rounded-2xl py-4 active:bg-gray-50"
-              >
-                <span className="text-2xl font-black" style={{ color: '#5f259f' }}>Pe</span>
-                <span className="text-xs font-bold text-gray-700">PhonePe</span>
-              </button>
-              <button
-                onClick={() => { window.location.href = `paytmmp://pay?pa=${pa}` }}
-                className="flex flex-col items-center justify-center gap-2 bg-white border-2 border-gray-200 rounded-2xl py-4 active:bg-gray-50"
-              >
-                <span className="text-2xl font-black" style={{ color: '#00BAF2' }}>Pt</span>
-                <span className="text-xs font-bold text-gray-700">Paytm</span>
+                {switchingToCash ? 'Switching... / మారుతోంది' : 'Switch to Cash on Pickup / నగదు పికప్‌కు మారండి'}
               </button>
             </div>
 
-            {/* Paid confirmation */}
+            {/* Optional transaction note */}
+            <div>
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wide block mb-1.5">
+                Transaction note (optional) / లావాదేవీ నోట్
+              </label>
+              <input
+                type="text"
+                inputMode="text"
+                placeholder="e.g. GPay ref 123456"
+                value={utrNote}
+                onChange={(e) => setUtrNote(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+              />
+            </div>
+
+            {/* I Have Paid */}
             <button
               onClick={handlePaymentSuccess}
-              disabled={submittingResult}
+              disabled={submittingResult || switchingToCash}
               className="w-full bg-green-700 text-white font-bold py-4 rounded-xl text-base disabled:opacity-50 active:bg-green-800"
             >
-              {submittingResult ? 'Saving...' : '✓ I have paid / చెల్లించాను'}
+              {submittingResult ? 'Saving...' : '✓ I Have Paid / చెల్లించాను'}
             </button>
           </div>
         </div>
@@ -728,7 +828,7 @@ function CartSheet({
                       )}
 
                       {paymentMethod === 'upi' ? (
-                        (liveUpiIds[f.farmerId] ?? f.farmerUpiId) ? (
+                        (liveUpiIds[f.farmerId] || f.farmerUpiId || liveQrUrls[f.farmerId]) ? (
                           <button
                             onClick={() => handleUpiOrderFarmer(group)}
                             disabled={detailsMissing || placingUpiOrder === f.farmerId}
@@ -740,12 +840,12 @@ function CartSheet({
                           >
                             {placingUpiOrder === f.farmerId
                               ? 'Placing order...'
-                              : `📲 Order & Pay ₹${Math.round(group.reduce((s, it) => s + (it.pricePerKg ?? 0) * it.qty, 0))} via UPI`}
+                              : `📲 Order & Pay ₹${Math.round(group.reduce((s, it) => s + (it.pricePerKg ?? 0) * it.qty, 0))}`}
                           </button>
                         ) : (
                           <div className="mt-1 space-y-2">
                             <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2 text-center">
-                              ⚠️ This farmer hasn&apos;t set up UPI yet. Using Cash on Delivery.
+                              ⚠️ This farmer hasn&apos;t set up UPI yet. Using Cash on Pickup.
                             </p>
                             <button
                               onClick={() => handleCodOrderFarmer(group)}
@@ -758,7 +858,7 @@ function CartSheet({
                                     : 'bg-green-700 text-white active:bg-green-800'
                               }`}
                             >
-                              {sent ? <>✓ Order sent</> : <><WhatsAppIcon /> Cash on Delivery</>}
+                              {sent ? <>✓ Order sent</> : <><WhatsAppIcon /> Cash on Pickup</>}
                             </button>
                           </div>
                         )
